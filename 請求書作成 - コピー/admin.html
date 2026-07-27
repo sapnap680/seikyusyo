@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>請求管理画面</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Segoe UI"', '"Hiragino Kaku Gothic ProN"', '"Noto Sans JP"', 'Meiryo', 'sans-serif'],
+          },
+          colors: {
+            brand: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',950:'#1e1b4b' },
+            blue: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#6366f1',500:'#4f46e5',600:'#4338ca',700:'#3730a3',800:'#312e81',900:'#1e1b4b',950:'#131033' },
+            cyan: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',950:'#1e1b4b' },
+            teal: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',950:'#1e1b4b' },
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-up { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    button, a { transition: all 0.2s ease; }
+    button:active { transform: translateY(1px); }
+    .invoice-table th,
+    .invoice-table td {
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .invoice-table td.text-wrap {
+      white-space: normal;
+      min-width: 220px;
+      line-height: 1.35;
+    }
+    #cashflowModal {
+      display: none;
+    }
+    #cashflowModal.is-open {
+      display: flex;
+    }
+    .cf-tab {
+      color: #475569;
+    }
+    .cf-tab:hover {
+      color: #1e293b;
+    }
+    .cf-tab.is-active {
+      background-color: #ffffff;
+      color: #4f46e5;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-slate-100 to-slate-200">
+  <div class="bg-white/95 backdrop-blur-sm shadow-lg border-b-4 border-cyan-500">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+      <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">請求管理表</h1>
+      <a href="./invoice.html" class="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">請求書作成へ</a>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto px-6 py-6 pb-8">
+    <div class="bg-white rounded-2xl shadow-xl p-5 md:p-6 animate-fade-up">
+      <h2 class="text-xl font-bold text-gray-800 mb-3 pb-2 border-b-2 border-cyan-500">請求一覧</h2>
+      <div class="mb-3 flex flex-wrap items-start gap-2 text-sm">
+        <div class="inline-flex items-center gap-2 bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-200 rounded-lg px-3 py-1.5 shrink-0">
+          <span class="text-gray-600 font-bold whitespace-nowrap">未入金</span>
+          <span id="sumUnpaid" class="text-lg font-bold text-cyan-600 whitespace-nowrap">¥0</span>
+        </div>
+        <select id="statusFilter" title="表示状態" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none">
+          <option value="all">すべて</option>
+          <option value="unpaid">未入金</option>
+          <option value="paid">入金済</option>
+          <option value="has_deposit">預り金あり</option>
+        </select>
+        <select id="dueFilter" title="期限状態" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none">
+          <option value="all">期限すべて</option>
+          <option value="overdue">期限超過</option>
+          <option value="not_overdue">期限内</option>
+          <option value="no_due">期限なし</option>
+        </select>
+        <div class="flex flex-col gap-1.5">
+          <div class="flex flex-wrap items-center gap-2">
+            <select id="searchField" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-24">
+              <option value="">全項目</option>
+              <option value="clientName">請求先</option>
+              <option value="subjectName">科目名</option>
+              <option value="category">区分</option>
+              <option value="requestDepartment">依頼部署</option>
+              <option value="invoiceNo">請求番号</option>
+            </select>
+            <input id="searchWord" type="text" placeholder="キーワード検索" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-36 md:w-48 min-w-0">
+            <button type="button" id="addSearchRowBtn" class="w-8 h-8 rounded-lg border border-cyan-300 text-cyan-700 font-bold hover:bg-cyan-50" title="検索条件を追加">+</button>
+          </div>
+          <div id="extraSearchRows" class="flex flex-col gap-1.5">
+            <div class="extra-search-row hidden flex flex-wrap items-center gap-2" data-index="1">
+              <select id="searchField1" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-24">
+                <option value="">全項目</option>
+                <option value="clientName">請求先</option>
+                <option value="subjectName">科目名</option>
+                <option value="category">区分</option>
+                <option value="requestDepartment">依頼部署</option>
+                <option value="invoiceNo">請求番号</option>
+              </select>
+              <input id="searchWord1" type="text" placeholder="キーワード検索" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-36 md:w-48 min-w-0">
+              <button type="button" class="remove-search-row w-8 h-8 rounded-lg border border-gray-300 text-gray-500 font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-300" title="この条件を削除">−</button>
+            </div>
+            <div class="extra-search-row hidden flex flex-wrap items-center gap-2" data-index="2">
+              <select id="searchField2" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-24">
+                <option value="">全項目</option>
+                <option value="clientName">請求先</option>
+                <option value="subjectName">科目名</option>
+                <option value="category">区分</option>
+                <option value="requestDepartment">依頼部署</option>
+                <option value="invoiceNo">請求番号</option>
+              </select>
+              <input id="searchWord2" type="text" placeholder="キーワード検索" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-36 md:w-48 min-w-0">
+              <button type="button" class="remove-search-row w-8 h-8 rounded-lg border border-gray-300 text-gray-500 font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-300" title="この条件を削除">−</button>
+            </div>
+            <div class="extra-search-row hidden flex flex-wrap items-center gap-2" data-index="3">
+              <select id="searchField3" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-24">
+                <option value="">全項目</option>
+                <option value="clientName">請求先</option>
+                <option value="subjectName">科目名</option>
+                <option value="category">区分</option>
+                <option value="requestDepartment">依頼部署</option>
+                <option value="invoiceNo">請求番号</option>
+              </select>
+              <input id="searchWord3" type="text" placeholder="キーワード検索" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none w-36 md:w-48 min-w-0">
+              <button type="button" class="remove-search-row w-8 h-8 rounded-lg border border-gray-300 text-gray-500 font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-300" title="この条件を削除">−</button>
+            </div>
+          </div>
+        </div>
+        <button id="searchRunBtn" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold hover:from-blue-700 hover:to-cyan-700">検索</button>
+        <button id="searchClearBtn" class="px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 font-bold hover:bg-gray-300">クリア</button>
+        <button id="reloadBtn" class="px-3 py-1.5 rounded-lg border border-cyan-300 text-cyan-700 font-bold hover:bg-cyan-50">再読込</button>
+        <button type="button" id="openBulkModalBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-amber-500 text-white font-bold hover:bg-amber-600">一括更新</button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full border-collapse invoice-table">
+          <thead>
+            <tr class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white">
+              <th class="border border-cyan-500 px-2 py-3 text-center font-bold w-10"></th>
+              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">請求番号</th>
+              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">相手先</th>
+              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">科目名</th>
+              <th class="border border-cyan-500 px-3 py-3 text-right font-bold">請求額</th>
+              <th class="border border-cyan-500 px-3 py-3 text-right font-bold">残高</th>
+              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">期限状態</th>
+              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">状態</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">操作</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceTable">
+            <tr><td colspan="9" class="border px-3 py-6 text-center text-gray-500">読み込み中...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="rowActionMenu" class="hidden fixed z-[60] bg-white rounded-xl shadow-2xl ring-1 ring-gray-200 py-1 w-40">
+    <button type="button" id="rowMenuMemo" class="block w-full text-left px-4 py-2 text-sm font-bold text-purple-700 hover:bg-purple-50">メモ</button>
+    <button type="button" id="rowMenuUnpaid" class="block w-full text-left px-4 py-2 text-sm font-bold text-orange-700 hover:bg-orange-50">未入金に戻す</button>
+    <button type="button" id="rowMenuSave" class="block w-full text-left px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-50">PDF保存</button>
+    <button type="button" id="rowMenuPrint" class="block w-full text-left px-4 py-2 text-sm font-bold text-cyan-700 hover:bg-cyan-50">印刷</button>
+    <button type="button" id="rowMenuDelete" class="block w-full text-left px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50">削除</button>
+  </div>
+
+  <div id="memoModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div class="flex justify-between items-start mb-4">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800 pb-3 border-b-2 border-purple-500">メモ</h2>
+          <p id="memoModalTitle" class="text-sm text-gray-600 mt-1"></p>
+        </div>
+        <button type="button" id="memoModalClose" class="text-gray-500 hover:text-gray-800 text-2xl leading-none">&times;</button>
+      </div>
+      <textarea id="memoInput" rows="5" placeholder="この請求書に関するメモを入力" class="w-full border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-purple-500 outline-none resize-y"></textarea>
+      <div class="flex gap-2 mt-3">
+        <button type="button" id="memoSaveBtn" class="px-5 py-2.5 rounded-xl bg-purple-600 text-white font-bold hover:bg-purple-700 shadow-md">保存</button>
+        <button type="button" id="memoClearBtn" class="px-5 py-2.5 rounded-xl bg-gray-200 text-gray-700 font-bold hover:bg-gray-300">クリア</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="bulkModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+      <div class="flex justify-between items-start mb-4">
+        <h2 class="text-xl font-bold text-gray-800 pb-3 border-b-2 border-amber-500">範囲で一括更新 / PDF保存</h2>
+        <button type="button" id="bulkModalClose" class="text-gray-500 hover:text-gray-800 text-2xl leading-none">&times;</button>
+      </div>
+
+      <div class="space-y-5">
+        <div class="border border-amber-200 rounded-xl p-4 bg-amber-50">
+          <h3 class="font-bold text-gray-800 mb-1">手順1: 対象の範囲を選ぶ</h3>
+          <p class="text-sm text-gray-600 mb-3">請求番号の From 〜 To に一括で適用します。</p>
+          <div class="flex flex-wrap gap-3 items-end">
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">請求番号 From</label>
+              <input id="bulkFromNo" type="number" min="1" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-36">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">請求番号 To</label>
+              <input id="bulkToNo" type="number" min="1" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-36">
+            </div>
+          </div>
+        </div>
+
+        <div class="border border-cyan-200 rounded-xl p-4 bg-cyan-50">
+          <h3 class="font-bold text-gray-800 mb-1">手順2: 変更する項目を入力</h3>
+          <p class="text-sm text-gray-600 mb-3">空欄の項目は変更しません。入力した項目だけ上書きします。</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">締め日</label>
+              <input id="bulkClosingDate" type="date" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-full">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">支払期限</label>
+              <input id="bulkDueDate" type="date" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-full">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">入金日</label>
+              <input id="bulkCollectionDate" type="date" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-full" title="未入金がある請求はこの日付で全額入金を登録します">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">科目名</label>
+              <input id="bulkSubjectName" type="text" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-full">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">区分</label>
+              <input id="bulkCategory" type="text" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-full">
+            </div>
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">依頼部署</label>
+              <input id="bulkRequestDepartment" type="text" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-full">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3 pt-1">
+          <button id="bulkUpdateBtn" class="px-5 py-3 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-700 shadow-md">範囲で一括更新</button>
+          <button id="bulkSaveBtn" class="px-5 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-md">範囲のPDFを一括保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cashflowModal" class="fixed inset-0 z-50 items-center justify-center bg-black/50 p-4">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+      <div class="bg-gradient-to-r from-blue-600 to-cyan-600 px-5 py-3.5 flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-bold text-white leading-tight">入金・返金・預り金</h2>
+          <p id="cashflowModalTitle" class="text-xs text-cyan-50/90 mt-0.5"></p>
+        </div>
+        <button type="button" id="cashflowModalClose" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4">
+        <div id="cashflowModalSummary" class="grid grid-cols-2 gap-2"></div>
+
+        <div class="flex gap-1.5 bg-slate-100 rounded-xl p-1">
+          <button type="button" data-cf-tab="collection" class="cf-tab flex-1 py-1.5 rounded-lg text-sm font-bold transition">入金</button>
+          <button type="button" data-cf-tab="refund" class="cf-tab flex-1 py-1.5 rounded-lg text-sm font-bold transition">返金</button>
+          <button type="button" data-cf-tab="deposit" class="cf-tab flex-1 py-1.5 rounded-lg text-sm font-bold transition">預り金</button>
+        </div>
+
+        <div data-cf-panel="collection" class="cf-panel rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">入金日</label>
+              <input id="collectionDateInput" type="date" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-blue-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">金額（円）</label>
+              <input id="collectionAmountInput" type="number" min="1" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-blue-500 outline-none">
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2 mt-2.5">
+            <button type="button" id="collectionPartialBtn" class="flex-1 min-w-[8rem] px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700">一部入金</button>
+            <button type="button" id="collectionFullBtn" class="flex-1 min-w-[8rem] px-3 py-2 rounded-lg bg-blue-800 text-white text-sm font-bold hover:bg-blue-900">残高を全額入金</button>
+          </div>
+        </div>
+
+        <div data-cf-panel="refund" class="cf-panel hidden rounded-xl border border-orange-200 bg-orange-50 p-3">
+          <p class="text-xs text-gray-600 mb-2">過払い分を取引先へ返金します。</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">返金日</label>
+              <input id="refundDateInput" type="date" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-orange-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">返金額（円）</label>
+              <input id="refundAmountInput" type="number" min="1" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-orange-500 outline-none">
+            </div>
+          </div>
+          <button type="button" id="refundSubmitBtn" class="mt-2.5 w-full px-3 py-2 rounded-lg bg-orange-600 text-white text-sm font-bold hover:bg-orange-700">返金を登録</button>
+        </div>
+
+        <div data-cf-panel="deposit" class="cf-panel hidden rounded-xl border border-purple-200 bg-purple-50 p-3">
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-sm font-bold text-gray-700">預り金残高</span>
+            <span id="clientDepositBalanceText" class="text-base font-bold text-purple-800">¥0</span>
+          </div>
+          <p class="text-xs text-gray-600 mb-2">過払い分を返金せず預り金へ移します。</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">移動日</label>
+              <input id="toDepositDateInput" type="date" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-purple-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">金額（円）</label>
+              <input id="toDepositAmountInput" type="number" min="1" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-purple-500 outline-none">
+            </div>
+          </div>
+          <button type="button" id="toDepositBtn" class="mt-2.5 w-full px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-bold hover:bg-purple-700">預り金に移す</button>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">履歴</h3>
+          <ul id="cashflowHistoryList" class="text-sm border border-gray-200 rounded-xl divide-y max-h-40 overflow-y-auto"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./js/firebase.js"></script>
+  <script src="./js/db.js"></script>
+  <script src="./js/date-utils.js"></script>
+  <script>
+    let invoices = [];
+    let cashflowInvoiceId = null;
+    let clientDepositMap = {};
+
+    function normalizeClientKey(clientName) {
+      const raw = String(clientName || "").trim();
+      if (!raw) return "_unknown";
+      return raw.replace(/[\\/]/g, "_").slice(0, 150);
+    }
+
+    function getRowClientDeposit(row) {
+      return clientDepositMap[normalizeClientKey(row.clientName)] || 0;
+    }
+
+    async function loadClientDepositMap() {
+      const deposits = await getAllClientDeposits();
+      clientDepositMap = {};
+      deposits.forEach((row) => {
+        clientDepositMap[normalizeClientKey(row.clientName)] = Number(row.balance || 0);
+      });
+    }
+
+    function yen(value) {
+      return "¥" + Number(value || 0).toLocaleString("ja-JP");
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function todayIso() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function statusText(row) {
+      const billed = Number(row.billedAmount || 0);
+      const paid = Number(row.totalPaid || 0);
+      if (paid > billed) return "過払い";
+      if (row.status === "paid") return "入金済";
+      return "未入金";
+    }
+
+    function statusClass(row) {
+      const billed = Number(row.billedAmount || 0);
+      const paid = Number(row.totalPaid || 0);
+      if (paid > billed) return "bg-purple-100 text-purple-800";
+      if (row.status === "paid") return "bg-green-100 text-green-800";
+      return "bg-red-100 text-red-800";
+    }
+
+    function calcRemaining(row) {
+      return Math.max(0, Number(row.billedAmount || 0) - Number(row.totalPaid || 0));
+    }
+
+    function calcOverpaid(row) {
+      return Math.max(0, Number(row.totalPaid || 0) - Number(row.billedAmount || 0));
+    }
+
+    function formatBalanceDiff(row) {
+      const billed = Number(row.billedAmount || 0);
+      const paid = Number(row.totalPaid || 0);
+      const diff = paid - billed;
+      if (diff === 0) return '<span class="text-gray-600">±0</span>';
+      if (diff > 0) {
+        return `<span class="text-purple-700 font-bold">+${yen(diff).slice(1)}</span>`;
+      }
+      return `<span class="text-red-700 font-bold">-${yen(Math.abs(diff)).slice(1)}</span>`;
+    }
+
+    function getInvoiceNoSortValue(row) {
+      const raw = String(row?.invoiceNo ?? "").trim();
+      if (/^\d+$/.test(raw)) return Number(raw);
+      return Number.NEGATIVE_INFINITY;
+    }
+
+    function getDueStatus(row) {
+      const dueDate = parseDateOnly(row.dueDate);
+      if (!dueDate) {
+        return { key: "no_due", label: "未設定", className: "bg-gray-100 text-gray-700" };
+      }
+      if (row.status === "paid") {
+        return { key: "paid", label: "入金済", className: "bg-green-100 text-green-800" };
+      }
+      const today = new Date();
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      if (dueDate.getTime() < todayStart.getTime()) {
+        return { key: "overdue", label: "期限超過", className: "bg-red-100 text-red-800" };
+      }
+      if (dueDate.getTime() === todayStart.getTime()) {
+        return { key: "today", label: "今日期限", className: "bg-amber-100 text-amber-800" };
+      }
+      return { key: "within", label: "期限内", className: "bg-cyan-100 text-cyan-800" };
+    }
+
+    const SEARCHABLE_FIELDS = ["clientName", "subjectName", "category", "requestDepartment", "invoiceNo"];
+    const MAX_EXTRA_SEARCH_ROWS = 3;
+    let extraSearchVisibleCount = 0;
+
+    function getSearchConditions() {
+      const conditions = [];
+      const mainField = (document.getElementById("searchField")?.value || "").trim();
+      const mainWord = (document.getElementById("searchWord")?.value || "").trim();
+      if (mainWord) {
+        conditions.push({ field: mainField, word: mainWord.toLowerCase() });
+      }
+      for (let i = 1; i <= MAX_EXTRA_SEARCH_ROWS; i++) {
+        const row = document.querySelector(`.extra-search-row[data-index="${i}"]`);
+        if (!row || row.classList.contains("hidden")) continue;
+        const field = (document.getElementById(`searchField${i}`)?.value || "").trim();
+        const word = (document.getElementById(`searchWord${i}`)?.value || "").trim();
+        if (word) {
+          conditions.push({ field, word: word.toLowerCase() });
+        }
+      }
+      return conditions;
+    }
+
+    function matchesFieldCondition(row, field, word) {
+      const fields = field ? [field] : SEARCHABLE_FIELDS;
+      return fields.some((key) => {
+        const value = String(row[key] || "").trim().toLowerCase();
+        if (key === "category") return value === word;
+        return value.includes(word);
+      });
+    }
+
+    function matchesSearchRow(row) {
+      const conditions = getSearchConditions();
+      if (conditions.length === 0) return true;
+      return conditions.every((condition) => matchesFieldCondition(row, condition.field, condition.word));
+    }
+
+    function updateExtraSearchUi() {
+      const rows = document.querySelectorAll(".extra-search-row");
+      rows.forEach((row) => {
+        const index = Number(row.dataset.index);
+        const visible = index <= extraSearchVisibleCount;
+        row.classList.toggle("hidden", !visible);
+        if (!visible) {
+          const field = document.getElementById(`searchField${index}`);
+          const word = document.getElementById(`searchWord${index}`);
+          if (field) field.value = "";
+          if (word) word.value = "";
+        }
+      });
+      const addBtn = document.getElementById("addSearchRowBtn");
+      if (addBtn) {
+        const atMax = extraSearchVisibleCount >= MAX_EXTRA_SEARCH_ROWS;
+        addBtn.disabled = atMax;
+        addBtn.classList.toggle("opacity-40", atMax);
+        addBtn.classList.toggle("cursor-not-allowed", atMax);
+      }
+    }
+
+    function addSearchRow() {
+      if (extraSearchVisibleCount >= MAX_EXTRA_SEARCH_ROWS) return;
+      extraSearchVisibleCount += 1;
+      updateExtraSearchUi();
+    }
+
+    function removeSearchRow() {
+      if (extraSearchVisibleCount <= 0) return;
+      const field = document.getElementById(`searchField${extraSearchVisibleCount}`);
+      const word = document.getElementById(`searchWord${extraSearchVisibleCount}`);
+      if (field) field.value = "";
+      if (word) word.value = "";
+      extraSearchVisibleCount -= 1;
+      updateExtraSearchUi();
+      render();
+    }
+
+    function clearAllSearchInputs() {
+      document.getElementById("searchField").value = "";
+      document.getElementById("searchWord").value = "";
+      for (let i = 1; i <= MAX_EXTRA_SEARCH_ROWS; i++) {
+        const field = document.getElementById(`searchField${i}`);
+        const word = document.getElementById(`searchWord${i}`);
+        if (field) field.value = "";
+        if (word) word.value = "";
+      }
+      extraSearchVisibleCount = 0;
+      updateExtraSearchUi();
+    }
+
+    function filterInvoicesByUi() {
+      const statusFilter = document.getElementById("statusFilter").value;
+      const dueFilter = document.getElementById("dueFilter").value;
+      return invoices
+        .filter((row) => {
+          let statusOk = true;
+          if (statusFilter === "has_deposit") {
+            statusOk = getRowClientDeposit(row) > 0;
+          } else if (statusFilter !== "all") {
+            statusOk = row.status === statusFilter;
+          }
+          if (!statusOk) return false;
+          const dueStatus = getDueStatus(row);
+          const dueOk =
+            dueFilter === "all"
+            || (dueFilter === "overdue" && dueStatus.key === "overdue")
+            || (dueFilter === "not_overdue" && (dueStatus.key === "within" || dueStatus.key === "today"))
+            || (dueFilter === "no_due" && dueStatus.key === "no_due");
+          if (!dueOk) return false;
+          return matchesSearchRow(row);
+        })
+        .sort((a, b) => {
+          const aNo = getInvoiceNoSortValue(a);
+          const bNo = getInvoiceNoSortValue(b);
+          if (aNo !== bNo) return bNo - aNo;
+          const aDate = String(a.issueDate || "");
+          const bDate = String(b.issueDate || "");
+          return bDate.localeCompare(aDate);
+        });
+    }
+
+    function render() {
+      const filtered = filterInvoicesByUi();
+
+      const tbody = document.getElementById("invoiceTable");
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="border px-3 py-6 text-center text-gray-500">データがありません</td></tr>';
+      } else {
+        tbody.innerHTML = filtered.map((row, index) => {
+          const remain = calcRemaining(row);
+          const dueStatus = getDueStatus(row);
+          const dueDateLabel = normalizeDateInput(row.dueDate) || "-";
+          const collectionLabel = normalizeDateInput(row.collectionDate) || "-";
+          const refundLabel = normalizeDateInput(row.refundDate) || "-";
+          const rowBg = index % 2 === 0 ? "bg-cyan-50" : "bg-white";
+          const safeNo = (row.invoiceNo || "").replace(/'/g, "\\'");
+          return `
+            <tr class="${rowBg} hover:bg-cyan-100 transition">
+              <td class="border px-2 py-2 text-center align-top">
+                <button type="button" onclick="toggleDetailRow('${row.id}', this)" class="detail-toggle w-7 h-7 rounded-lg text-cyan-700 hover:bg-cyan-100 font-bold" title="詳細を表示">▶</button>
+              </td>
+              <td class="border px-3 py-2 align-top whitespace-nowrap">${row.invoiceNo || "-"}${row.memo ? ' <span class="text-purple-600" title="メモあり">📝</span>' : ""}</td>
+              <td class="border px-3 py-2 text-wrap align-top">${row.clientName || "-"}</td>
+              <td class="border px-3 py-2 text-wrap align-top">${row.subjectName || "-"}</td>
+              <td class="border px-3 py-2 text-right align-top">${yen(row.billedAmount)}</td>
+              <td class="border px-3 py-2 text-right font-bold align-top">${yen(remain)}</td>
+              <td class="border px-3 py-2 align-top">
+                <span class="px-2 py-1 rounded ${dueStatus.className}">${dueStatus.label}</span>
+              </td>
+              <td class="border px-3 py-2 align-top">
+                <span class="px-2 py-1 rounded ${statusClass(row)}">${statusText(row)}</span>
+              </td>
+              <td class="border px-3 py-2 text-center align-top whitespace-nowrap">
+                <div class="inline-flex items-center gap-1">
+                  <button onclick="editInvoice('${row.id}')" class="px-2 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-bold hover:from-blue-700 hover:to-cyan-700">編集</button>
+                  <button onclick="openCashflowModal('${row.id}')" class="px-2 py-1 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700">入金・預り金</button>
+                  <button type="button" onclick="openRowMenu(event, '${row.id}', '${safeNo}')" class="px-2 py-1 rounded-lg bg-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-300" title="その他の操作">…</button>
+                </div>
+              </td>
+            </tr>
+            <tr id="detail-${row.id}" class="detail-row hidden ${rowBg}">
+              <td class="border px-3 py-3" colspan="9">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2 text-sm">
+                  <div><span class="text-gray-500">発行日</span><div class="font-bold text-gray-800">${row.issueDate || "-"}</div></div>
+                  <div><span class="text-gray-500">振込期限</span><div class="font-bold text-gray-800">${dueDateLabel}</div></div>
+                  <div><span class="text-gray-500">区分</span><div class="font-bold text-gray-800">${row.category || "-"}</div></div>
+                  <div><span class="text-gray-500">依頼部署</span><div class="font-bold text-gray-800">${row.requestDepartment || "-"}</div></div>
+                  <div><span class="text-gray-500">入金済</span><div class="font-bold text-gray-800">${yen(row.totalPaid)}</div></div>
+                  <div><span class="text-gray-500">入金日</span><div class="font-bold text-gray-800">${collectionLabel}</div></div>
+                  <div><span class="text-gray-500">返金日</span><div class="font-bold text-gray-800">${refundLabel}</div></div>
+                  <div><span class="text-gray-500">過不足</span><div class="font-bold">${formatBalanceDiff(row)}</div></div>
+                </div>
+                ${row.memo ? `<div class="mt-3 pt-3 border-t border-gray-200"><span class="text-gray-500 text-sm">メモ</span><div class="text-gray-800 whitespace-pre-wrap">${escapeHtml(row.memo)}</div></div>` : ""}
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+
+      const sumUnpaid = filtered.reduce((acc, row) => acc + calcRemaining(row), 0);
+      document.getElementById("sumUnpaid").textContent = yen(sumUnpaid);
+    }
+
+    function toggleDetailRow(invoiceId, btn) {
+      const detail = document.getElementById(`detail-${invoiceId}`);
+      if (!detail) return;
+      const isHidden = detail.classList.toggle("hidden");
+      if (btn) {
+        btn.textContent = isHidden ? "▶" : "▼";
+        btn.title = isHidden ? "詳細を表示" : "詳細を隠す";
+      }
+    }
+
+    let rowMenuInvoiceId = null;
+    let rowMenuInvoiceNo = "";
+
+    function positionRowMenu(anchor) {
+      const menu = document.getElementById("rowActionMenu");
+      const rect = anchor.getBoundingClientRect();
+      menu.classList.remove("hidden");
+      const menuWidth = menu.offsetWidth;
+      const menuHeight = menu.offsetHeight;
+      let left = rect.right - menuWidth;
+      if (left < 8) left = 8;
+      let top = rect.bottom + 4;
+      if (top + menuHeight > window.innerHeight - 8) {
+        top = rect.top - menuHeight - 4;
+      }
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    }
+
+    function openRowMenu(event, invoiceId, invoiceNo) {
+      event.stopPropagation();
+      rowMenuInvoiceId = invoiceId;
+      rowMenuInvoiceNo = invoiceNo || "";
+      positionRowMenu(event.currentTarget);
+    }
+
+    function closeRowMenu() {
+      const menu = document.getElementById("rowActionMenu");
+      if (menu) menu.classList.add("hidden");
+      rowMenuInvoiceId = null;
+    }
+
+    function openBulkModal() {
+      const modal = document.getElementById("bulkModal");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function closeBulkModal() {
+      const modal = document.getElementById("bulkModal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    let memoInvoiceId = null;
+
+    function openMemoModal(invoiceId) {
+      const row = invoices.find((item) => item.id === invoiceId);
+      if (!row) {
+        alert("請求書が見つかりません");
+        return;
+      }
+      memoInvoiceId = invoiceId;
+      document.getElementById("memoModalTitle").textContent =
+        `No.${row.invoiceNo || "-"} ${row.clientName || ""}`;
+      document.getElementById("memoInput").value = row.memo || "";
+      const modal = document.getElementById("memoModal");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      document.getElementById("memoInput").focus();
+    }
+
+    function closeMemoModal() {
+      memoInvoiceId = null;
+      const modal = document.getElementById("memoModal");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    async function saveMemo() {
+      if (!memoInvoiceId) return;
+      const memo = document.getElementById("memoInput").value;
+      try {
+        await updateInvoiceMemo(memoInvoiceId, memo);
+        const row = invoices.find((item) => item.id === memoInvoiceId);
+        if (row) row.memo = String(memo || "");
+        closeMemoModal();
+        render();
+      } catch (error) {
+        console.error(error);
+        alert("メモの保存に失敗しました: " + error.message);
+      }
+    }
+
+    function getCurrentFilteredInvoices() {
+      return filterInvoicesByUi();
+    }
+
+    async function loadInvoices() {
+      try {
+        const loaded = await getRecentInvoices(300);
+        invoices = loaded.map((row) => {
+          const billed = Number(row.billedAmount || 0);
+          const totalPaid = Number(row.totalPaid || 0);
+          return {
+            ...row,
+            status: deriveStatus(totalPaid, billed),
+          };
+        });
+        await loadClientDepositMap();
+        render();
+      } catch (error) {
+        console.error(error);
+        alert("請求書の読み込みに失敗しました: " + error.message);
+      }
+    }
+
+    function getCashflowRow() {
+      return invoices.find((item) => item.id === cashflowInvoiceId);
+    }
+
+    function setCashflowTab(tabName) {
+      document.querySelectorAll(".cf-tab").forEach((tab) => {
+        tab.classList.toggle("is-active", tab.dataset.cfTab === tabName);
+      });
+      document.querySelectorAll(".cf-panel").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.cfPanel !== tabName);
+      });
+    }
+
+    function cashflowStatCard(label, value, valueClass = "text-gray-900") {
+      return `<div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+        <div class="text-[11px] text-gray-500 font-bold">${label}</div>
+        <div class="text-sm font-bold ${valueClass}">${value}</div>
+      </div>`;
+    }
+
+    async function renderCashflowSummary(row) {
+      const remain = calcRemaining(row);
+      const over = calcOverpaid(row);
+      const depositBalance = await getClientDepositBalance(row.clientName);
+      document.getElementById("cashflowModalSummary").innerHTML =
+        cashflowStatCard("請求額", yen(row.billedAmount)) +
+        cashflowStatCard("入金済（純額）", yen(row.totalPaid), "text-blue-700") +
+        cashflowStatCard("未入金残高", yen(remain), remain > 0 ? "text-rose-600" : "text-emerald-600") +
+        cashflowStatCard("過払い", yen(over), over > 0 ? "text-orange-600" : "text-gray-900") +
+        cashflowStatCard("取引先の預り金", yen(depositBalance), "text-purple-700") +
+        cashflowStatCard("入金日 / 返金日", `${normalizeDateInput(row.collectionDate) || "-"} / ${normalizeDateInput(row.refundDate) || "-"}`);
+      document.getElementById("clientDepositBalanceText").textContent = yen(depositBalance);
+      document.getElementById("collectionAmountInput").value = remain > 0 ? String(remain) : "";
+      document.getElementById("refundAmountInput").value = over > 0 ? String(over) : "";
+      document.getElementById("toDepositAmountInput").value = over > 0 ? String(over) : "";
+    }
+
+    async function renderCashflowHistory(invoiceId) {
+      const listEl = document.getElementById("cashflowHistoryList");
+      const payments = await getPaymentsByInvoiceId(invoiceId);
+      if (!payments.length) {
+        listEl.innerHTML = '<li class="px-3 py-2 text-gray-500">履歴なし</li>';
+        return;
+      }
+      listEl.innerHTML = payments.map((p) => {
+        const type = p.type || "collection";
+        const labels = {
+          collection: { text: "入金", color: "text-blue-700" },
+          refund: { text: "返金", color: "text-orange-700" },
+          to_deposit: { text: "預り金へ", color: "text-purple-700" },
+          from_deposit: { text: "預り金充当", color: "text-purple-900" },
+        };
+        const meta = labels[type] || labels.collection;
+        const dateLabel = normalizeDateInput(p.paidDate) || "-";
+        const noteHtml = p.note ? `<div class="text-xs text-gray-500 mt-0.5">${escapeHtml(p.note)}</div>` : "";
+        return `<li class="px-3 py-2">
+          <div class="flex justify-between items-center gap-2">
+            <span class="${meta.color} font-bold whitespace-nowrap">${meta.text}</span>
+            <span class="text-gray-600">${dateLabel}</span>
+            <span class="font-bold ml-auto">${yen(p.amount)}</span>
+            <button type="button" onclick="editPaymentEntry('${p.id}')" class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200">変更</button>
+            <button type="button" onclick="removePaymentEntry('${p.id}')" class="px-2 py-0.5 rounded bg-red-100 text-red-700 text-xs font-bold hover:bg-red-200">取消</button>
+          </div>
+          ${noteHtml}
+        </li>`;
+      }).join("");
+    }
+
+    async function editPaymentEntry(paymentId) {
+      const payment = await getPaymentById(paymentId).catch(() => null);
+      if (!payment) {
+        alert("対象の入出金履歴が見つかりません");
+        return;
+      }
+      const typeLabels = {
+        collection: "入金",
+        refund: "返金",
+        to_deposit: "預り金へ移動",
+        from_deposit: "預り金充当",
+      };
+      const label = typeLabels[payment.type || "collection"] || "入出金";
+      const dateStr = prompt(`【${label}】日付（YYYY-MM-DD）`, normalizeDateInput(payment.paidDate) || todayIso());
+      if (dateStr === null) return;
+      const amountStr = prompt(`【${label}】金額（円）`, String(payment.amount ?? ""));
+      if (amountStr === null) return;
+      const amount = Number(amountStr);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert("金額は1円以上の数値で入力してください");
+        return;
+      }
+      const note = prompt(`【${label}】メモ（任意）`, payment.note || "");
+      if (note === null) return;
+      try {
+        await updatePaymentEntry(paymentId, { paidDate: dateStr.trim(), amount, note });
+        await loadClientDepositMap();
+        await refreshCashflowModal();
+        render();
+        alert("入出金の内容を変更しました");
+      } catch (error) {
+        console.error(error);
+        alert("変更に失敗しました: " + error.message);
+      }
+    }
+
+    async function removePaymentEntry(paymentId) {
+      const ok = confirm("この入出金操作を取り消しますか？\n（この1件のみを削除して残高を再計算します）");
+      if (!ok) return;
+      try {
+        await deletePaymentEntry(paymentId);
+        await loadClientDepositMap();
+        await refreshCashflowModal();
+        render();
+        alert("入出金操作を取り消しました");
+      } catch (error) {
+        console.error(error);
+        alert("取り消しに失敗しました: " + error.message);
+      }
+    }
+
+    async function openCashflowModal(invoiceId) {
+      let row = invoices.find((item) => item.id === invoiceId);
+      if (!row) {
+        alert("請求書が見つかりません");
+        return;
+      }
+      try {
+        await syncInvoicePaymentSummary(invoiceId);
+        await loadInvoices();
+        row = invoices.find((item) => item.id === invoiceId);
+      } catch (error) {
+        console.warn("入金履歴の再計算:", error);
+      }
+      cashflowInvoiceId = invoiceId;
+      document.getElementById("cashflowModalTitle").textContent =
+        `No.${row.invoiceNo || "-"} ${row.clientName || ""}`;
+      const today = todayIso();
+      document.getElementById("collectionDateInput").value = normalizeDateInput(row.collectionDate) || today;
+      document.getElementById("refundDateInput").value = normalizeDateInput(row.refundDate) || today;
+      document.getElementById("toDepositDateInput").value = today;
+      await renderCashflowSummary(row);
+      await renderCashflowHistory(invoiceId);
+      setCashflowTab("collection");
+      document.getElementById("cashflowModal").classList.add("is-open");
+    }
+
+    function closeCashflowModal() {
+      cashflowInvoiceId = null;
+      document.getElementById("cashflowModal").classList.remove("is-open");
+    }
+
+    async function refreshCashflowModal() {
+      if (!cashflowInvoiceId) return;
+      await loadInvoices();
+      const row = getCashflowRow();
+      if (!row) {
+        closeCashflowModal();
+        return;
+      }
+      await renderCashflowSummary(row);
+      await renderCashflowHistory(cashflowInvoiceId);
+    }
+
+    async function submitPartialCollection() {
+      if (!cashflowInvoiceId) return;
+      const row = getCashflowRow();
+      if (!row) return;
+      const amount = Number(document.getElementById("collectionAmountInput").value);
+      const paidDate = document.getElementById("collectionDateInput").value;
+      if (!paidDate) {
+        alert("入金日を入力してください");
+        return;
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert("入金額は1円以上で入力してください");
+        return;
+      }
+      try {
+        await addCollectionPayment(cashflowInvoiceId, amount, paidDate, "");
+        await refreshCashflowModal();
+        alert(`入金を登録しました（${yen(amount)}）`);
+      } catch (error) {
+        console.error(error);
+        alert("入金登録に失敗しました: " + error.message);
+      }
+    }
+
+    async function submitFullCollection() {
+      if (!cashflowInvoiceId) return;
+      const row = getCashflowRow();
+      if (!row) return;
+      const remaining = calcRemaining(row);
+      if (remaining <= 0) {
+        alert("未入金残高がありません");
+        return;
+      }
+      const paidDate = document.getElementById("collectionDateInput").value;
+      if (!paidDate) {
+        alert("入金日を入力してください");
+        return;
+      }
+      const ok = confirm(`残高 ${yen(remaining)} を全額入金しますか？`);
+      if (!ok) return;
+      try {
+        await settleInvoiceFull(cashflowInvoiceId, paidDate, "");
+        await refreshCashflowModal();
+        alert(`全額入金を登録しました（${yen(remaining)}）`);
+      } catch (error) {
+        console.error(error);
+        alert("入金登録に失敗しました: " + error.message);
+      }
+    }
+
+    async function submitRefund() {
+      if (!cashflowInvoiceId) return;
+      const row = getCashflowRow();
+      if (!row) return;
+      const amount = Number(document.getElementById("refundAmountInput").value);
+      const paidDate = document.getElementById("refundDateInput").value;
+      if (!paidDate) {
+        alert("返金日を入力してください");
+        return;
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert("返金額は1円以上で入力してください");
+        return;
+      }
+      try {
+        await addRefundPayment(cashflowInvoiceId, amount, paidDate, "");
+        await refreshCashflowModal();
+        alert(`返金を登録しました（${yen(amount)}）`);
+      } catch (error) {
+        console.error(error);
+        alert("返金登録に失敗しました: " + error.message);
+      }
+    }
+
+    async function submitToDeposit() {
+      if (!cashflowInvoiceId) return;
+      const row = getCashflowRow();
+      if (!row) return;
+      const amount = Number(document.getElementById("toDepositAmountInput").value);
+      const paidDate = document.getElementById("toDepositDateInput").value;
+      if (!paidDate) {
+        alert("移動日を入力してください");
+        return;
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert("金額は1円以上で入力してください");
+        return;
+      }
+      const over = calcOverpaid(row);
+      if (amount > over) {
+        alert(`過払い分（${yen(over)}）を超えて預り金に移動できません`);
+        return;
+      }
+      const ok = confirm(`${yen(amount)} を預り金に移しますか？\n（この請求の過払い表示が解消され、取引先の預り金残高が増えます）`);
+      if (!ok) return;
+      try {
+        await moveOverpaymentToDeposit(cashflowInvoiceId, amount, paidDate);
+        await refreshCashflowModal();
+        await loadClientDepositMap();
+        render();
+        alert(`預り金に移しました（${yen(amount)}）`);
+      } catch (error) {
+        console.error(error);
+        alert("預り金への移動に失敗しました: " + error.message);
+      }
+    }
+
+    function openPrint(invoiceId) {
+      window.open("./invoice-print.html?id=" + encodeURIComponent(invoiceId), "_blank");
+    }
+
+    const pdfDownloadWaiters = new Map();
+
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || data.type !== "invoice-pdf-download") return;
+      const waiter = pdfDownloadWaiters.get(data.invoiceId);
+      if (!waiter) return;
+      clearTimeout(waiter.timer);
+      pdfDownloadWaiters.delete(data.invoiceId);
+      if (data.status === "ok") {
+        waiter.resolve();
+      } else {
+        waiter.reject(new Error(data.detail || "PDF保存に失敗しました"));
+      }
+    });
+
+    function savePdf(invoiceId) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pdfDownloadWaiters.delete(invoiceId);
+          reject(new Error("PDF保存がタイムアウトしました"));
+        }, 90000);
+
+        pdfDownloadWaiters.set(invoiceId, { resolve, reject, timer });
+
+        const existing = document.getElementById("pdfDownloadFrame");
+        if (existing) existing.remove();
+        const frame = document.createElement("iframe");
+        frame.id = "pdfDownloadFrame";
+        frame.style.position = "fixed";
+        frame.style.left = "-12000px";
+        frame.style.top = "0";
+        frame.style.width = "1100px";
+        frame.style.height = "1600px";
+        frame.style.opacity = "0";
+        frame.style.pointerEvents = "none";
+        frame.style.border = "0";
+        frame.src = "./invoice-print.html?id=" + encodeURIComponent(invoiceId) + "&download=1";
+        document.body.appendChild(frame);
+      });
+    }
+
+    function wait(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function getRangeTargets(useAllInvoices) {
+      const fromValue = document.getElementById("bulkFromNo").value.trim();
+      const toValue = document.getElementById("bulkToNo").value.trim();
+      if (!fromValue && !toValue) {
+        return { error: "From/To のどちらかを入力してください", targets: [] };
+      }
+
+      let fromNo = fromValue ? Number(fromValue) : Number.NaN;
+      let toNo = toValue ? Number(toValue) : Number.NaN;
+      if (Number.isNaN(fromNo) && !Number.isNaN(toNo)) fromNo = toNo;
+      if (Number.isNaN(toNo) && !Number.isNaN(fromNo)) toNo = fromNo;
+      if (!Number.isFinite(fromNo) || !Number.isFinite(toNo)) {
+        return { error: "範囲指定の数字が不正です", targets: [] };
+      }
+      if (fromNo > toNo) {
+        const temp = fromNo;
+        fromNo = toNo;
+        toNo = temp;
+      }
+
+      const filtered = useAllInvoices ? invoices : getCurrentFilteredInvoices();
+      const targets = filtered
+        .map((row) => ({ ...row, invoiceNoNum: Number(row.invoiceNo) }))
+        .filter((row) => Number.isFinite(row.invoiceNoNum))
+        .filter((row) => row.invoiceNoNum >= fromNo && row.invoiceNoNum <= toNo)
+        .sort((a, b) => a.invoiceNoNum - b.invoiceNoNum);
+
+      return { fromNo, toNo, targets };
+    }
+
+    async function bulkSavePdf() {
+      const { error, targets } = getRangeTargets(true);
+      if (error) {
+        alert(error);
+        return;
+      }
+      if (targets.length === 0) {
+        alert("指定範囲に一致する請求書がありません");
+        return;
+      }
+
+      const ok = confirm(`${targets.length}件の請求書PDFを順番に保存します。実行しますか？`);
+      if (!ok) return;
+
+      const bulkBtn = document.getElementById("bulkSaveBtn");
+      const prevLabel = bulkBtn.textContent;
+      bulkBtn.disabled = true;
+      bulkBtn.textContent = "保存中…";
+
+      const failed = [];
+      let saved = 0;
+
+      try {
+        for (const row of targets) {
+          bulkBtn.textContent = `保存中… ${saved + 1}/${targets.length}`;
+          try {
+            await savePdf(row.id);
+            saved += 1;
+            await wait(500);
+          } catch (saveError) {
+            console.error(saveError);
+            failed.push({
+              invoiceNo: row.invoiceNo || "-",
+              clientName: row.clientName || "",
+              message: saveError.message,
+            });
+          }
+        }
+
+        if (failed.length === 0) {
+          alert(`一括保存が完了しました（${targets.length}件）`);
+        } else {
+          const failedLines = failed
+            .map((item) => `No.${item.invoiceNo} ${item.clientName}: ${item.message}`)
+            .join("\n");
+          alert(
+            `一括保存が完了しました（成功 ${saved}件 / 失敗 ${failed.length}件）\n\n失敗した請求書:\n${failedLines}`
+          );
+        }
+      } finally {
+        bulkBtn.disabled = false;
+        bulkBtn.textContent = prevLabel;
+      }
+    }
+
+    async function bulkUpdateInvoices() {
+      const { error, targets } = getRangeTargets();
+      if (error) {
+        alert(error);
+        return;
+      }
+      if (targets.length === 0) {
+        alert("指定範囲に一致する請求書がありません");
+        return;
+      }
+
+      const patch = {};
+      const closingDate = document.getElementById("bulkClosingDate").value.trim();
+      const dueDate = document.getElementById("bulkDueDate").value.trim();
+      const collectionDate = document.getElementById("bulkCollectionDate").value.trim();
+      const subjectName = document.getElementById("bulkSubjectName").value.trim();
+      const category = document.getElementById("bulkCategory").value.trim();
+      const requestDepartment = document.getElementById("bulkRequestDepartment").value.trim();
+
+      if (closingDate) patch.closingDate = closingDate;
+      if (dueDate) patch.dueDate = dueDate;
+      if (subjectName) patch.subjectName = subjectName;
+      if (category) patch.category = category;
+      if (requestDepartment) patch.requestDepartment = requestDepartment;
+
+      if (Object.keys(patch).length === 0 && !collectionDate) {
+        alert("更新する項目を1つ以上入力してください");
+        return;
+      }
+
+      const ok = confirm(`${targets.length}件を一括更新します。実行しますか？`);
+      if (!ok) return;
+
+      try {
+        let settledCount = 0;
+        let dateOnlyCount = 0;
+        for (const row of targets) {
+          if (Object.keys(patch).length > 0) {
+            await updateInvoiceData(row.id, patch);
+          }
+          if (collectionDate) {
+            const remaining = calcRemaining(row);
+            if (remaining > 0) {
+              await settleInvoiceFull(row.id, collectionDate, "");
+              settledCount += 1;
+            } else {
+              await setInvoiceCollectionDate(row.id, collectionDate);
+              dateOnlyCount += 1;
+            }
+          }
+        }
+        await loadClientDepositMap();
+        await loadInvoices();
+        if (collectionDate && settledCount > 0) {
+          alert(`一括更新が完了しました（${targets.length}件）\n全額入金を登録: ${settledCount}件\n入金日のみ更新: ${dateOnlyCount}件`);
+        } else {
+          alert(`一括更新が完了しました（${targets.length}件）`);
+        }
+      } catch (error2) {
+        console.error(error2);
+        alert("一括更新に失敗しました: " + error2.message);
+      }
+    }
+
+    async function deleteInvoice(invoiceId, invoiceNo) {
+      const label = invoiceNo ? `請求番号 ${invoiceNo}` : "この請求書";
+      const confirmed = confirm(`${label} を削除しますか？\n関連する入金履歴も削除されます。`);
+      if (!confirmed) return;
+
+      try {
+        const deletedPayments = await deleteInvoiceWithPayments(invoiceId);
+        await loadInvoices();
+        alert(`削除しました（請求書1件、入金履歴${deletedPayments}件）`);
+      } catch (error) {
+        console.error(error);
+        alert("削除に失敗しました: " + error.message);
+      }
+    }
+
+    async function markUnpaid(invoiceId) {
+      const row = invoices.find((item) => item.id === invoiceId);
+      if (!row) {
+        alert("対象の請求書が見つかりません");
+        return;
+      }
+      if ((row.totalPaid || 0) <= 0 && row.status === "unpaid") {
+        alert("すでに未入金です");
+        return;
+      }
+
+      const ok = confirm("この請求書を未入金に戻しますか？\n入金・返金の履歴もすべて削除されます。");
+      if (!ok) return;
+
+      try {
+        await clearInvoicePayments(invoiceId);
+        await loadInvoices();
+        alert("未入金に戻しました（履歴を削除しました）");
+      } catch (error) {
+        console.error(error);
+        alert("未入金への変更に失敗しました: " + error.message);
+      }
+    }
+
+    function buildTaxPatchByPrompt(row) {
+      const defaultTaxRate = (row.taxRate === "other" || row.taxRate === null || row.taxRate === undefined)
+        ? "other"
+        : String(row.taxRate);
+      const taxRateStr = prompt("消費税率（10/8/0 または other）", defaultTaxRate || "10");
+      if (taxRateStr === null) return null;
+      const normalizedTaxRate = taxRateStr.trim().toLowerCase();
+
+      let taxRate;
+      let baseAmount;
+      let taxAmount;
+      let billedAmount;
+      let occurrenceAmount;
+
+      if (normalizedTaxRate === "other") {
+        taxRate = "other";
+        const occurrenceStr = prompt("発生額（円）", String(row.occurrenceAmount ?? row.baseAmount ?? 0));
+        if (occurrenceStr === null) return null;
+        occurrenceAmount = Number(occurrenceStr);
+        if (!Number.isFinite(occurrenceAmount) || occurrenceAmount < 0) {
+          alert("発生額は0以上の数値で入力してください");
+          return null;
+        }
+
+        const taxAmountStr = prompt("消費税額（円）", String(row.taxAmount ?? 0));
+        if (taxAmountStr === null) return null;
+        taxAmount = Number(taxAmountStr);
+        if (!Number.isFinite(taxAmount) || taxAmount < 0) {
+          alert("消費税額は0以上の数値で入力してください");
+          return null;
+        }
+
+        baseAmount = occurrenceAmount;
+        billedAmount = occurrenceAmount + taxAmount;
+      } else {
+        taxRate = Number(normalizedTaxRate);
+        if (![0, 8, 10].includes(taxRate)) {
+          alert("消費税率は 10 / 8 / 0 / other のいずれかで入力してください");
+          return null;
+        }
+
+        const baseAmountStr = prompt("税抜金額（円）", String(row.baseAmount ?? 0));
+        if (baseAmountStr === null) return null;
+        baseAmount = Number(baseAmountStr);
+        if (!Number.isFinite(baseAmount) || baseAmount < 0) {
+          alert("税抜金額は0以上の数値で入力してください");
+          return null;
+        }
+
+        taxAmount = Math.round(baseAmount * taxRate / 100);
+        occurrenceAmount = baseAmount + taxAmount;
+        billedAmount = occurrenceAmount;
+      }
+
+      return {
+        taxRate,
+        baseAmount,
+        taxAmount,
+        occurrenceAmount,
+        billedAmount,
+      };
+    }
+
+    async function editInvoice(invoiceId) {
+      const row = invoices.find((item) => item.id === invoiceId);
+      if (!row) {
+        alert("対象の請求書が見つかりません");
+        return;
+      }
+
+      const choice = prompt(
+        "編集項目を番号で選択してください:\n"
+        + "1: 請求先会社名\n"
+        + "2: 科目名\n"
+        + "3: 区分\n"
+        + "4: 依頼部署\n"
+        + "5: 備考\n"
+        + "6: 発行日\n"
+        + "7: 締め日\n"
+        + "8: 支払期限\n"
+        + "9: 税情報（税率/発生額/消費税額）",
+        "1"
+      );
+      if (choice === null) return;
+
+      const patch = {};
+      const selected = choice.trim();
+      if (selected === "1") {
+        const v = prompt("請求先会社名", row.clientName || "");
+        if (v === null) return;
+        patch.clientName = v.trim();
+      } else if (selected === "2") {
+        const v = prompt("科目名（空欄可）", row.subjectName || "");
+        if (v === null) return;
+        patch.subjectName = v.trim();
+      } else if (selected === "3") {
+        const v = prompt("区分（空欄可）", row.category || "");
+        if (v === null) return;
+        patch.category = v.trim();
+      } else if (selected === "4") {
+        const v = prompt("依頼部署（空欄可）", row.requestDepartment || "");
+        if (v === null) return;
+        patch.requestDepartment = v.trim();
+      } else if (selected === "5") {
+        const v = prompt("備考（空欄可）", row.description || "");
+        if (v === null) return;
+        patch.description = v.trim();
+      } else if (selected === "6") {
+        const v = prompt("発行日（YYYY-MM-DD）", row.issueDate || "");
+        if (v === null) return;
+        patch.issueDate = v.trim();
+      } else if (selected === "7") {
+        const v = prompt("締め日（YYYY-MM-DD）", row.closingDate || "");
+        if (v === null) return;
+        patch.closingDate = v.trim();
+      } else if (selected === "8") {
+        const v = prompt("支払期限（YYYY-MM-DD）", row.dueDate || "");
+        if (v === null) return;
+        patch.dueDate = v.trim();
+      } else if (selected === "9") {
+        const taxPatch = buildTaxPatchByPrompt(row);
+        if (!taxPatch) return;
+        Object.assign(patch, taxPatch);
+      } else {
+        alert("1〜9 の番号で入力してください");
+        return;
+      }
+
+      if (Object.keys(patch).length === 0) {
+        alert("更新項目がありません");
+        return;
+      }
+
+      try {
+        await updateInvoiceData(invoiceId, patch);
+        await loadInvoices();
+        alert("請求書データを更新しました");
+      } catch (error) {
+        console.error(error);
+        alert("請求書データの更新に失敗しました: " + error.message);
+      }
+    }
+
+    document.getElementById("reloadBtn").addEventListener("click", loadInvoices);
+    document.getElementById("statusFilter").addEventListener("change", render);
+    document.getElementById("dueFilter").addEventListener("change", render);
+    document.getElementById("searchRunBtn").addEventListener("click", render);
+    document.getElementById("searchClearBtn").addEventListener("click", () => {
+      clearAllSearchInputs();
+      render();
+    });
+    document.getElementById("addSearchRowBtn").addEventListener("click", addSearchRow);
+    document.querySelectorAll(".remove-search-row").forEach((btn) => {
+      btn.addEventListener("click", removeSearchRow);
+    });
+    document.getElementById("searchField").addEventListener("change", render);
+    document.getElementById("searchWord").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        render();
+      }
+    });
+    for (let i = 1; i <= MAX_EXTRA_SEARCH_ROWS; i++) {
+      document.getElementById(`searchField${i}`)?.addEventListener("change", render);
+      document.getElementById(`searchWord${i}`)?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          render();
+        }
+      });
+    }
+    updateExtraSearchUi();
+    document.getElementById("bulkSaveBtn").addEventListener("click", bulkSavePdf);
+    document.getElementById("bulkUpdateBtn").addEventListener("click", bulkUpdateInvoices);
+    document.getElementById("openBulkModalBtn").addEventListener("click", openBulkModal);
+    document.getElementById("bulkModalClose").addEventListener("click", closeBulkModal);
+    document.getElementById("bulkModal").addEventListener("click", (event) => {
+      if (event.target.id === "bulkModal") closeBulkModal();
+    });
+    document.getElementById("cashflowModalClose").addEventListener("click", closeCashflowModal);
+    document.getElementById("cashflowModal").addEventListener("click", (event) => {
+      if (event.target.id === "cashflowModal") closeCashflowModal();
+    });
+    document.getElementById("collectionPartialBtn").addEventListener("click", submitPartialCollection);
+    document.getElementById("collectionFullBtn").addEventListener("click", submitFullCollection);
+    document.getElementById("refundSubmitBtn").addEventListener("click", submitRefund);
+    document.getElementById("toDepositBtn").addEventListener("click", submitToDeposit);
+    document.querySelectorAll(".cf-tab").forEach((tab) => {
+      tab.addEventListener("click", () => setCashflowTab(tab.dataset.cfTab));
+    });
+
+    document.getElementById("rowMenuMemo").addEventListener("click", () => {
+      const id = rowMenuInvoiceId;
+      closeRowMenu();
+      if (id) openMemoModal(id);
+    });
+    document.getElementById("rowMenuUnpaid").addEventListener("click", () => {
+      const id = rowMenuInvoiceId;
+      closeRowMenu();
+      if (id) markUnpaid(id);
+    });
+    document.getElementById("rowMenuSave").addEventListener("click", () => {
+      const id = rowMenuInvoiceId;
+      closeRowMenu();
+      if (id) savePdf(id);
+    });
+    document.getElementById("rowMenuPrint").addEventListener("click", () => {
+      const id = rowMenuInvoiceId;
+      closeRowMenu();
+      if (id) openPrint(id);
+    });
+    document.getElementById("rowMenuDelete").addEventListener("click", () => {
+      const id = rowMenuInvoiceId;
+      const no = rowMenuInvoiceNo;
+      closeRowMenu();
+      if (id) deleteInvoice(id, no);
+    });
+    document.addEventListener("click", (event) => {
+      const menu = document.getElementById("rowActionMenu");
+      if (menu.classList.contains("hidden")) return;
+      if (!menu.contains(event.target)) closeRowMenu();
+    });
+    window.addEventListener("scroll", closeRowMenu, true);
+    window.addEventListener("resize", closeRowMenu);
+
+    document.getElementById("memoModalClose").addEventListener("click", closeMemoModal);
+    document.getElementById("memoSaveBtn").addEventListener("click", saveMemo);
+    document.getElementById("memoClearBtn").addEventListener("click", () => {
+      document.getElementById("memoInput").value = "";
+    });
+    document.getElementById("memoModal").addEventListener("click", (event) => {
+      if (event.target.id === "memoModal") closeMemoModal();
+    });
+
+    window.openCashflowModal = openCashflowModal;
+    window.openPrint = openPrint;
+    window.savePdf = savePdf;
+    window.bulkSavePdf = bulkSavePdf;
+    window.bulkUpdateInvoices = bulkUpdateInvoices;
+    window.markUnpaid = markUnpaid;
+    window.deleteInvoice = deleteInvoice;
+    window.editInvoice = editInvoice;
+    window.toggleDetailRow = toggleDetailRow;
+    window.openRowMenu = openRowMenu;
+    window.editPaymentEntry = editPaymentEntry;
+    window.removePaymentEntry = removePaymentEntry;
+    window.openMemoModal = openMemoModal;
+
+    loadInvoices();
+  </script>
+</body>
+</html>
+
+</html>
+
+
