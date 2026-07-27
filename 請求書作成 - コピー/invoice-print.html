@@ -105,28 +105,38 @@
       font-size: 15.5px;
       font-weight: 700;
       margin-top: 10mm !important;
-      letter-spacing: 0.2px;
+      letter-spacing: 0.02em;
       text-align: left;
-      white-space: normal;
+      white-space: nowrap;
       line-height: 1.35;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      display: inline-block;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      display: block;
       border-bottom: 1.2px solid #000;
       padding-bottom: 0.8mm;
-      max-width: 100%;
+      width: auto;
+      max-width: 95mm;
+      font-family: "Yu Gothic", "游ゴシック", "YuGothic", "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif !important;
     }
-    /* 宛名「名前 御中」: 15文字以上で段階的に縮小 */
+    /* 宛名は基本1行。長い場合のみ JS で縮小し、それでも足りないとき折り返し */
     #recipientTitle {
+      white-space: nowrap;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      width: auto;
+      max-width: 95mm;
+      line-height: 1.35;
+      letter-spacing: 0.02em;
+    }
+    #recipientTitle.recipient-wrap {
       white-space: normal;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      max-width: 100%;
+      word-break: keep-all;
+      overflow-wrap: break-word;
     }
     #recipientTitle.recipient-len-over-15,
     #sheet.csv-mode #recipientTitle.recipient-len-over-15 {
       font-size: 14px;
-      letter-spacing: 0;
+      letter-spacing: 0.01em;
       line-height: 1.32;
     }
     #recipientTitle.recipient-len-over-23,
@@ -138,7 +148,7 @@
     #recipientTitle.recipient-len-over-28,
     #sheet.csv-mode #recipientTitle.recipient-len-over-28 {
       font-size: 11px;
-      letter-spacing: -0.1px;
+      letter-spacing: 0;
       line-height: 1.25;
     }
     #sheet.csv-mode #headerTopRow {
@@ -671,11 +681,33 @@
 
     function setRecipientTitle(clientName) {
       const el = document.getElementById("recipientTitle");
+      if (!el) return;
       const text = formatInvoiceRecipient(clientName);
       el.textContent = text;
-      el.classList.remove("recipient-len-over-15", "recipient-len-over-23", "recipient-len-over-28");
+      el.style.fontSize = "";
+      el.classList.remove(
+        "recipient-len-over-15",
+        "recipient-len-over-23",
+        "recipient-len-over-28",
+        "recipient-wrap"
+      );
       const sizeClass = getRecipientSizeClass(clientName);
       if (sizeClass) el.classList.add(sizeClass);
+
+      // 短い社名（例: 株式会社ロッテ）も含め、幅に収まるまで縮小して1行を優先
+      requestAnimationFrame(() => {
+        el.style.fontSize = "";
+        el.classList.remove("recipient-wrap");
+        let size = parseFloat(getComputedStyle(el).fontSize) || 16;
+        const minSize = 11;
+        while (size > minSize && el.scrollWidth > el.clientWidth + 1) {
+          size -= 0.5;
+          el.style.fontSize = `${size}px`;
+        }
+        if (el.scrollWidth > el.clientWidth + 1) {
+          el.classList.add("recipient-wrap");
+        }
+      });
     }
 
     function formatFinanceNo(issueDate, invoiceNo) {
