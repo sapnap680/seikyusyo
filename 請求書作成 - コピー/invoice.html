@@ -582,21 +582,14 @@
       }
     }
 
-    function parseCsv(text) {
-      const rows = [];
-      let row = [];
+    function parseCsvRow(line) {
+      const values = [];
       let cur = "";
       let inQuotes = false;
-      const src = String(text || "").replace(/^\uFEFF/, "");
-      const pushRow = () => {
-        const cells = row.map((v) => String(v || "").replace(/\r\n/g, "\n").replace(/^\s+|\s+$/g, ""));
-        if (cells.some((cell) => cell !== "")) rows.push(cells);
-        row = [];
-      };
-      for (let i = 0; i < src.length; i += 1) {
-        const ch = src[i];
+      for (let i = 0; i < line.length; i += 1) {
+        const ch = line[i];
         if (ch === '"') {
-          if (inQuotes && src[i + 1] === '"') {
+          if (inQuotes && line[i + 1] === '"') {
             cur += '"';
             i += 1;
           } else {
@@ -605,27 +598,14 @@
           continue;
         }
         if (ch === "," && !inQuotes) {
-          row.push(cur);
+          values.push(cur);
           cur = "";
-          continue;
-        }
-        if ((ch === "\n" || ch === "\r") && !inQuotes) {
-          if (ch === "\r" && src[i + 1] === "\n") i += 1;
-          row.push(cur);
-          cur = "";
-          pushRow();
           continue;
         }
         cur += ch;
       }
-      row.push(cur);
-      pushRow();
-      return rows;
-    }
-
-    function parseCsvRow(line) {
-      const rows = parseCsv(line);
-      return rows[0] || [];
+      values.push(cur);
+      return values.map((v) => v.trim());
     }
 
     function normalizeHeaderName(name) {
@@ -726,8 +706,8 @@
       return new Date().getFullYear();
     }
 
-    async function importUniversityCsv(rows) {
-      const header = rows[0];
+    async function importUniversityCsv(rawLines) {
+      const header = parseCsvRow(rawLines[0]);
       const { resolveIdx, resolveIndexed } = buildCsvHeaderContext(header);
       const dueDateIdx = resolveIdx(["dueDate", "お支払期限", "お支払い期限", "支払期限", "振込期限"]);
       const clientNameIdx = resolveIdx(["宛名", "clientName", "相手先", "請求先", "御中"]);
@@ -762,8 +742,8 @@
       const errors = [];
       const todayIso = new Date().toISOString().slice(0, 10);
 
-      for (let lineNo = 1; lineNo < rows.length; lineNo += 1) {
-        const row = rows[lineNo];
+      for (let lineNo = 1; lineNo < rawLines.length; lineNo += 1) {
+        const row = parseCsvRow(rawLines[lineNo]);
         try {
           const clientNameVal = getCell(row, clientNameIdx).replace(/[ 　]*(御中|様)\s*$/u, "").trim();
           if (!clientNameVal) continue;
@@ -827,8 +807,8 @@
       }
     }
 
-    async function importCorporateCsv(rows) {
-      const header = rows[0];
+    async function importCorporateCsv(rawLines) {
+      const header = parseCsvRow(rawLines[0]);
       const { resolveIdx, resolveIndexed } = buildCsvHeaderContext(header);
       const issueDateIdx = resolveIdx(["issueDate", "請求日", "発行日"]);
       const closingDateIdx = resolveIdx(["closingDate", "締め日", "締切日", "締切"]);
@@ -870,8 +850,8 @@
       const errors = [];
       const todayIso = new Date().toISOString().slice(0, 10);
 
-      for (let lineNo = 1; lineNo < rows.length; lineNo += 1) {
-        const row = rows[lineNo];
+      for (let lineNo = 1; lineNo < rawLines.length; lineNo += 1) {
+        const row = parseCsvRow(rawLines[lineNo]);
         try {
           const issuedFlag = issuedFlagIdx >= 0 ? getCell(row, issuedFlagIdx).toLowerCase() : "";
           if (issuedFlag === "ok") continue;
@@ -987,17 +967,17 @@
       }
 
       const text = await readCsvText(file);
-      const rows = parseCsv(text);
-      if (rows.length < 2) {
+      const rawLines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+      if (rawLines.length < 2) {
         alert("CSVデータが不足しています（ヘッダー+1行以上必要）");
         return;
       }
 
       if (importType === "university") {
-        await importUniversityCsv(rows);
+        await importUniversityCsv(rawLines);
         return;
       }
-      await importCorporateCsv(rows);
+      await importCorporateCsv(rawLines);
     }
 
     baseAmountInput.addEventListener("input", syncFromBase);
