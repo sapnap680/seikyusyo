@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>請求書作成</title>
+  <script src="./js/ensure-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -570,7 +571,7 @@
         await loadNextInvoiceNo(true);
         alert("請求書を保存しました");
         if (withPrint) {
-          window.open("./invoice-print.html?id=" + encodeURIComponent(id), "_blank");
+          window.open("./invoice-print.html?id=" + encodeURIComponent(id) + "&t=" + Date.now(), "_blank");
         }
       } catch (error) {
         console.error(error);

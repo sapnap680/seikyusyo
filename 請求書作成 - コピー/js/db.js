@@ -79,26 +79,40 @@ const DEFAULT_INVOICE_FORMAT = {
   accountHolder: "ウエマツマサヒロ",
 };
 
-function mergeInvoiceFormat(data) {
-  const src = data && typeof data === "object" ? data : {};
-  const merged = { ...DEFAULT_INVOICE_FORMAT };
+function normalizeFormatText(value) {
+  return String(value ?? "").replace(/\r\n/g, "\n").replace(/^\s+|\s+$/g, "");
+}
+
+function blankInvoiceFormat() {
+  const blank = {};
   Object.keys(DEFAULT_INVOICE_FORMAT).forEach((key) => {
-    if (src[key] != null && String(src[key]).trim() !== "") {
-      merged[key] = String(src[key]).trim();
-    }
+    blank[key] = "";
+  });
+  return blank;
+}
+
+function mergeInvoiceFormat(data, useDefaults = true) {
+  const src = data && typeof data === "object" ? data : {};
+  const merged = useDefaults ? { ...DEFAULT_INVOICE_FORMAT } : blankInvoiceFormat();
+  Object.keys(DEFAULT_INVOICE_FORMAT).forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(src, key) || src[key] == null) return;
+    merged[key] = normalizeFormatText(src[key]);
   });
   return merged;
 }
 
 async function getInvoiceFormat() {
   const doc = await db.collection("settings").doc("invoiceFormat").get();
-  return mergeInvoiceFormat(doc.exists ? doc.data() : {});
+  if (!doc.exists) return { ...DEFAULT_INVOICE_FORMAT };
+  return mergeInvoiceFormat(doc.data(), false);
 }
 
 async function saveInvoiceFormat(format) {
-  const payload = mergeInvoiceFormat(format);
-  payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
-  await db.collection("settings").doc("invoiceFormat").set(payload, { merge: true });
+  const payload = mergeInvoiceFormat(format, false);
+  await db.collection("settings").doc("invoiceFormat").set({
+    ...payload,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
   return payload;
 }
 

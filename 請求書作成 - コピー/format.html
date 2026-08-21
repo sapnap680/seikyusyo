@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>請求書の書式設定</title>
+  <script src="./js/ensure-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -36,14 +37,14 @@
   </div>
 
   <div class="max-w-5xl mx-auto px-6 py-6 pb-8">
-    <form id="formatForm" class="bg-white rounded-2xl shadow-xl p-8 space-y-6">
-      <p class="text-sm text-gray-600">請求書に印字する連盟情報と振込先を変更できます。保存すると、これから開く請求書すべてに反映されます。複数行の欄は <span class="font-bold">Enter で改行</span> でき、請求書にもそのまま出ます。</p>
+    <form id="formatForm" class="bg-white rounded-2xl shadow-xl p-8 space-y-6" novalidate>
+      <p class="text-sm text-gray-600">請求書に印字する連盟情報と振込先を変更できます。保存すると、これから開く請求書すべてに反映されます。どの欄も <span class="font-bold">空欄のまま保存</span> できます。複数行の欄は <span class="font-bold">Enter で改行</span> でき、請求書にもそのまま出ます。</p>
 
       <section class="rounded-xl border border-gray-200 p-5 space-y-4">
         <h2 class="font-bold text-gray-800 pb-2 border-b-2 border-cyan-500">連盟情報</h2>
         <div>
           <label class="block text-sm font-bold text-gray-700 mb-1">団体名</label>
-          <textarea id="orgName" rows="2" required class="w-full border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none resize-y"></textarea>
+          <textarea id="orgName" rows="2" class="w-full border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none resize-y"></textarea>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -109,9 +110,14 @@
         </div>
       </section>
 
+      <div class="rounded-xl border-2 border-cyan-400 bg-cyan-50 p-4 text-sm leading-7">
+        <div class="font-bold text-cyan-800 mb-1">請求書に印字される振込先</div>
+        <div id="printBankPreview" class="whitespace-pre-line font-semibold text-gray-800"></div>
+      </div>
+
       <div class="flex flex-wrap gap-3">
         <button type="submit" id="saveBtn" class="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold hover:from-blue-700 hover:to-cyan-700 shadow-md">保存</button>
-        <button type="button" id="previewBtn" class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:from-cyan-700 hover:to-blue-700 shadow-md">印刷プレビュー</button>
+        <button type="button" id="previewBtn" class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:from-cyan-700 hover:to-cyan-700 shadow-md">印刷プレビュー</button>
       </div>
     </form>
   </div>
@@ -127,9 +133,26 @@
     function readForm() {
       const data = {};
       FIELDS.forEach((id) => {
-        data[id] = (document.getElementById(id).value || "").trim();
+        data[id] = (document.getElementById(id).value || "").replace(/\r\n/g, "\n").replace(/^\s+|\s+$/g, "");
       });
       return data;
+    }
+
+    function rememberFormat(data) {
+      try {
+        localStorage.setItem("invoiceFormatLive", JSON.stringify(data || {}));
+      } catch (_) {}
+    }
+
+    function updatePrintBankPreview(data) {
+      const f = data || {};
+      const line1Parts = [f.bankName, f.branchName, f.accountType, f.accountNumber]
+        .filter((part) => String(part || "").trim());
+      const line1 = line1Parts.length ? ["■振込先情報", ...line1Parts].join(" ") : "";
+      const el = document.getElementById("printBankPreview");
+      if (el) {
+        el.textContent = [line1, f.accountNameKana, f.accountHolder].filter(Boolean).join("\n");
+      }
     }
 
     function fillForm(data) {
@@ -137,6 +160,7 @@
         const el = document.getElementById(id);
         if (el) el.value = data[id] || "";
       });
+      updatePrintBankPreview(data);
     }
 
     async function loadFormat() {
@@ -155,7 +179,9 @@
       btn.disabled = true;
       btn.textContent = "保存中...";
       try {
-        await saveInvoiceFormat(readForm());
+        const saved = await saveInvoiceFormat(readForm());
+        rememberFormat(saved);
+        updatePrintBankPreview(saved);
         alert("書式を保存しました。これから開く請求書に反映されます。");
       } catch (error) {
         console.error(error);
@@ -168,12 +194,18 @@
 
     document.getElementById("previewBtn").addEventListener("click", async () => {
       try {
-        await saveInvoiceFormat(readForm());
-        window.open("./invoice-print.html?mock=manual", "_blank");
+        const saved = await saveInvoiceFormat(readForm());
+        rememberFormat(saved);
+        const fmt = encodeURIComponent(JSON.stringify(saved));
+        window.open("./invoice-print.html?mock=manual&t=" + Date.now() + "&fmt=" + fmt, "_blank");
       } catch (error) {
         console.error(error);
         alert("プレビュー用の保存に失敗しました: " + error.message);
       }
+    });
+
+    document.getElementById("formatForm").addEventListener("input", () => {
+      updatePrintBankPreview(readForm());
     });
 
     loadFormat();

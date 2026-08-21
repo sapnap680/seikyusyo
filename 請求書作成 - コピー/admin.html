@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>請求管理画面</title>
+  <script src="./js/ensure-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -934,7 +935,7 @@
     }
 
     function openPrint(invoiceId) {
-      window.open("./invoice-print.html?id=" + encodeURIComponent(invoiceId), "_blank");
+      window.open("./invoice-print.html?id=" + encodeURIComponent(invoiceId) + "&t=" + Date.now(), "_blank");
     }
 
     const pdfDownloadWaiters = new Map();
@@ -975,7 +976,7 @@
         frame.style.opacity = "0";
         frame.style.pointerEvents = "none";
         frame.style.border = "0";
-        frame.src = "./invoice-print.html?id=" + encodeURIComponent(invoiceId) + "&download=1";
+        frame.src = "./invoice-print.html?id=" + encodeURIComponent(invoiceId) + "&download=1&t=" + Date.now();
         document.body.appendChild(frame);
       });
     }

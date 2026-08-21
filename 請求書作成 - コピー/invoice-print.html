@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>請求書印刷</title>
+  <meta http-equiv="Cache-Control" content="no-store">
+  <script src="./js/ensure-local.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -75,6 +77,10 @@
     .ajimi-stamp {
       left: calc(50% - 5.35mm);
     }
+    .header-right {
+      position: relative;
+      overflow: visible;
+    }
     .org-line,
     #bankInfoMain,
     #bankAccountKana,
@@ -82,6 +88,7 @@
       white-space: pre-line;
     }
     .federation-stamp {
+      position: absolute;
       width: 32mm;
       height: 32mm;
       right: 2mm;
@@ -217,6 +224,8 @@
       font-feature-settings: "tnum" 1, "lnum" 1;
     }
     #sheet.csv-mode .header-right {
+      position: relative;
+      overflow: visible;
       background: #d9d9d9;
       padding: 2.6mm 3.2mm;
       width: auto;
@@ -238,6 +247,7 @@
       line-height: 1.5;
     }
     #sheet.csv-mode .federation-stamp {
+      position: absolute;
       width: 31mm;
       height: 31mm;
       right: 2mm;
@@ -690,7 +700,6 @@
         <span id="bankTransferFeeNote">※お振込み手数料は貴社ご負担にてお願いいたします。</span>
       </div>
       </div>
-      </div>
 
       <div class="stamp-area">
         <div class="stamp-grid">
@@ -728,6 +737,7 @@
   </div>
 
   <script src="./js/firebase.js"></script>
+  <script src="./js/db.js"></script>
   <script src="./js/date-utils.js"></script>
   <script>
     let currentPdfName = "請求書";
@@ -748,8 +758,66 @@
       return String(value || "").replace(/[-\s]/g, "");
     }
 
+    function readPassedFormat() {
+      const params = new URLSearchParams(window.location.search);
+      const fromQuery = params.get("fmt");
+      if (fromQuery) {
+        try {
+          const parsed = JSON.parse(fromQuery);
+          if (parsed && typeof parsed === "object") return parsed;
+        } catch (_) {}
+      }
+      try {
+        const live = JSON.parse(localStorage.getItem("invoiceFormatLive") || "null");
+        if (live && typeof live === "object") return live;
+      } catch (_) {}
+      return null;
+    }
+
+    async function loadAndApplyInvoiceFormat() {
+      const passed = readPassedFormat();
+      if (passed) applyInvoiceFormat(passed);
+
+      let data = passed || {};
+      try {
+        const snap = await db.collection("settings").doc("invoiceFormat").get();
+        if (snap.exists) {
+          data = snap.data() || data;
+        }
+      } catch (error) {
+        console.warn("書式設定のSDK読み込み:", error);
+        if (!Object.keys(data).length) {
+          try {
+            const res = await fetch("https://firestore.googleapis.com/v1/projects/kdaikda/databases/(default)/documents/settings/invoiceFormat");
+            if (res.ok) {
+              const json = await res.json();
+              const rest = {};
+              Object.keys(json.fields || {}).forEach((key) => {
+                const value = json.fields[key];
+                if (value && value.stringValue != null) rest[key] = value.stringValue;
+              });
+              data = rest;
+            }
+          } catch (restError) {
+            console.warn("書式設定のREST読み込み:", restError);
+          }
+        }
+      }
+      try {
+        const payload = typeof mergeInvoiceFormat === "function" ? mergeInvoiceFormat(data) : data;
+        localStorage.setItem("invoiceFormatLive", JSON.stringify(payload));
+      } catch (_) {}
+      applyInvoiceFormat(data);
+      return invoiceFormat;
+    }
+
     function applyInvoiceFormat(format) {
-      invoiceFormat = format || invoiceFormat;
+      const src = format || {};
+      const hasSavedFields = typeof DEFAULT_INVOICE_FORMAT === "object"
+        && Object.keys(DEFAULT_INVOICE_FORMAT).some((key) => Object.prototype.hasOwnProperty.call(src, key));
+      invoiceFormat = typeof mergeInvoiceFormat === "function"
+        ? mergeInvoiceFormat(src, !hasSavedFields)
+        : { ...(hasSavedFields ? {} : (typeof DEFAULT_INVOICE_FORMAT === "object" ? DEFAULT_INVOICE_FORMAT : {})), ...src };
       const f = invoiceFormat;
       const zip = formatZipDisplay(f.zip);
       const tel = String(f.tel || "").trim();
@@ -774,9 +842,9 @@
       setText("orgTelCsv", tel ? `℡${tel}` : "");
       setText("federationEmail", email ? `✉${email}` : "");
 
-      const bankLine = ["■振込先情報", f.bankName, f.branchName, f.accountType, f.accountNumber]
-        .filter((part) => String(part || "").trim())
-        .join(" ");
+      const bankParts = [f.bankName, f.branchName, f.accountType, f.accountNumber]
+        .filter((part) => String(part || "").trim());
+      const bankLine = bankParts.length ? ["■振込先情報", ...bankParts].join(" ") : "";
       setText("bankInfoMain", bankLine);
       setText("bankAccountKana", f.accountNameKana);
       setText("bankAccountHolder", f.accountHolder);
@@ -1110,15 +1178,8 @@
     }
 
     async function loadInvoice() {
+      await loadAndApplyInvoiceFormat();
       try {
-        invoiceFormat = await getInvoiceFormat();
-      } catch (error) {
-        console.warn("書式設定の読み込み:", error);
-        invoiceFormat = typeof mergeInvoiceFormat === "function"
-          ? mergeInvoiceFormat({})
-          : invoiceFormat;
-      }
-      applyInvoiceFormat(invoiceFormat);
 
       const params = new URLSearchParams(window.location.search);
       if (params.get("hideStamp") === "1") {
@@ -1258,6 +1319,9 @@
       }
       renderLineItems(row);
       setBankTransferFeeNote(row);
+      } finally {
+        applyInvoiceFormat(invoiceFormat);
+      }
     }
 
     window.downloadPdf = downloadPdf;
