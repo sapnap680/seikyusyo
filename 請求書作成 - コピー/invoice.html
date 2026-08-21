@@ -55,7 +55,10 @@
   <div class="bg-white/95 backdrop-blur-sm shadow-lg border-b-4 border-cyan-500">
     <div class="max-w-5xl mx-auto px-6 py-4 flex justify-between items-center">
       <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">請求書作成</h1>
-      <a href="./admin.html" class="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">管理画面へ</a>
+      <div class="flex gap-2">
+        <a href="./format.html" class="px-5 py-2 bg-white border-2 border-cyan-500 text-cyan-700 rounded-xl font-bold hover:bg-cyan-50">書式設定</a>
+        <a href="./admin.html" class="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">管理画面へ</a>
+      </div>
     </div>
   </div>
 
@@ -64,9 +67,11 @@
       <h2 class="text-2xl font-bold text-gray-800 pb-3 border-b-2 border-cyan-500">請求書入力</h2>
       <div class="border border-emerald-200 border-l-4 border-l-emerald-500 rounded-xl p-4 bg-emerald-50/70">
         <h2 class="font-bold text-gray-800 mb-2">CSV一括作成</h2>
-        <p class="text-sm text-gray-700 mb-3">
-          CSVからまとめて請求書を作成できます（依頼部署は全件「財務」、締め日は空で保存）。
-        </p>
+        <p class="text-sm text-gray-700 mb-1">CSVからまとめて請求書を作成できます。ボタンで形式が分かれます。</p>
+        <ul class="text-sm text-gray-700 mb-3 list-disc pl-5 space-y-1">
+          <li><span class="font-bold text-emerald-700">大学・連盟用</span>：宛名・お支払期限・内容/単価/数/金額の明細CSV（貴学・明細表。依頼部署は「財務」、締め日は空）</li>
+          <li><span class="font-bold text-indigo-700">企業用</span>：締め日・相手先住所・税抜金額などの企業CSV（貴社・3行表）</li>
+        </ul>
         <div class="flex flex-wrap gap-3 items-center">
           <input id="csvFileInput" type="file" accept=".csv,text/csv" class="text-sm">
           <button id="csvImportUniversityBtn" type="button" class="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700">大学・連盟用CSVを取り込む</button>
@@ -645,23 +650,7 @@
       return Number.isFinite(n) ? n : fallback;
     }
 
-    async function importCsvInvoices(importType) {
-      const file = csvFileInput.files && csvFileInput.files[0];
-      if (!file) {
-        alert("CSVファイルを選択してください");
-        return;
-      }
-      const isCorporate = importType === "corporate";
-      const isUniversity = importType === "university";
-
-      const text = await file.text();
-      const rawLines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
-      if (rawLines.length < 2) {
-        alert("CSVデータが不足しています（ヘッダー+1行以上必要）");
-        return;
-      }
-
-      const header = parseCsvRow(rawLines[0]);
+    function buildCsvHeaderContext(header) {
       const resolveIdx = buildHeaderResolver(header);
       const normalizedHeader = header.map((h) => normalizeHeaderName(h));
       const indexSet = (aliases) => new Set(aliases.map((a) => normalizeHeaderName(a)));
@@ -672,11 +661,148 @@
         }
         return -1;
       }
+      function resolveIndexed(numberedAliases, fallbackAliases, count = 5, allowScan = true) {
+        const idxs = [];
+        let prev = -1;
+        for (let n = 1; n <= count; n += 1) {
+          const aliases = numberedAliases.map((base) => `${base}${n}`).concat(
+            numberedAliases.map((base) => `${base}_${n}`)
+          );
+          if (n === 1 && allowScan) aliases.push(...fallbackAliases);
+          let idx = resolveIdx(aliases);
+          if (idx < 0 && prev >= 0 && allowScan) idx = findNextIndex(fallbackAliases, prev);
+          idxs.push(idx);
+          if (idx >= 0) prev = idx;
+        }
+        return idxs;
+      }
+      return { resolveIdx, findNextIndex, resolveIndexed };
+    }
 
-      const issueDateIdx = resolveIdx(["issueDate", "請求日"]);
+    function collectLineItemsFromCsv(row, contentIdxs, unitIdxs, qtyIdxs, amountIdxs) {
+      const items = [];
+      for (let i = 0; i < 5; i += 1) {
+        const unit = toNumberOrNaN(getCell(row, unitIdxs[i]));
+        const qty = toNumberOrNaN(getCell(row, qtyIdxs[i]));
+        const amount = toNumberOrNaN(getCell(row, amountIdxs[i]));
+        const computed = Number.isFinite(amount)
+          ? amount
+          : (Number.isFinite(unit) && Number.isFinite(qty) ? unit * qty : 0);
+        items.push({
+          content: getCell(row, contentIdxs[i]),
+          unitPrice: Number.isFinite(unit) ? unit : 0,
+          quantity: Number.isFinite(qty) ? qty : 0,
+          amount: computed,
+        });
+      }
+      return items;
+    }
+
+    function csvYearHint(issueDateVal) {
+      if (/^\d{4}-/.test(issueDateVal || "")) return Number(issueDateVal.slice(0, 4));
+      return new Date().getFullYear();
+    }
+
+    async function importUniversityCsv(rawLines) {
+      const header = parseCsvRow(rawLines[0]);
+      const { resolveIdx, resolveIndexed } = buildCsvHeaderContext(header);
+      const dueDateIdx = resolveIdx(["dueDate", "お支払期限", "お支払い期限", "支払期限", "振込期限"]);
+      const clientNameIdx = resolveIdx(["宛名", "clientName", "相手先", "請求先", "御中"]);
+      const issueDateIdx = resolveIdx(["issueDate", "請求日", "発行日"]);
+      const invoiceNoIdx = resolveIdx(["invoiceNo", "No.", "No", "番号"]);
+      const rateIdx = resolveIdx(["taxRate", "税率"]);
+      const contentIdxs = resolveIndexed(["内容"], ["内容"], 5, false);
+      const unitIdxs = resolveIndexed(["単価"], ["単価"], 5, false);
+      const qtyIdxs = resolveIndexed(["数", "数量"], ["数", "数量"], 5, false);
+      const amountIdxs = resolveIndexed(["金額"], ["金額"], 5, false);
+
+      const missing = [];
+      if (dueDateIdx < 0) missing.push("お支払期限");
+      if (clientNameIdx < 0) missing.push("宛名");
+      if (missing.length > 0) {
+        alert("大学・連盟用CSVの必須ヘッダーが不足しています: " + missing.join(", "));
+        return;
+      }
+
+      let nextNo = Number(await getNextInvoiceNumberFromInvoices());
+      if (!Number.isFinite(nextNo) || nextNo <= 0) nextNo = 1;
+
+      let created = 0;
+      const errors = [];
+      const todayIso = new Date().toISOString().slice(0, 10);
+
+      for (let lineNo = 1; lineNo < rawLines.length; lineNo += 1) {
+        const row = parseCsvRow(rawLines[lineNo]);
+        try {
+          const clientNameVal = getCell(row, clientNameIdx).replace(/[ 　]*(御中|様)\s*$/u, "").trim();
+          if (!clientNameVal) continue;
+
+          const issueDateVal = issueDateIdx >= 0
+            ? (parseFlexibleDate(getCell(row, issueDateIdx), csvYearHint(todayIso)) || todayIso)
+            : todayIso;
+          const dueDateVal = parseFlexibleDate(getCell(row, dueDateIdx), csvYearHint(issueDateVal));
+          if (!dueDateVal) {
+            throw new Error("お支払期限が読み取れません（例: 8月20日 / 2026-08-20）");
+          }
+
+          const lineItems = collectLineItemsFromCsv(row, contentIdxs, unitIdxs, qtyIdxs, amountIdxs);
+          const lineTotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+          if (lineTotal <= 0) {
+            throw new Error("内容・単価・数・金額の明細を1行以上入力してください");
+          }
+
+          const taxRateVal = rateIdx >= 0 ? parseTaxRateInput(getCell(row, rateIdx), 10) : 10;
+          const safeRate = [0, 8, 10].includes(taxRateVal) ? taxRateVal : 10;
+          const calc = calculateTaxBreakdown("tax_included", safeRate, lineTotal);
+          const csvNo = getCell(row, invoiceNoIdx);
+
+          await saveInvoice({
+            invoiceNo: csvNo || String(nextNo++),
+            issueDate: issueDateVal,
+            closingDate: "",
+            dueDate: dueDateVal,
+            clientName: clientNameVal,
+            clientContact: "",
+            clientZip: "",
+            clientAddress: "",
+            subjectName: "",
+            category: "",
+            requestDepartment: "財務",
+            description: lineItems.find((item) => item.content)?.content || "",
+            taxRate: calc.taxRate,
+            baseInput: calc.baseAmount,
+            totalInput: calc.occurrenceAmount,
+            baseAmount: calc.baseAmount,
+            taxAmount: calc.taxAmount,
+            occurrenceAmount: calc.occurrenceAmount,
+            billedAmount: calc.billedAmount,
+            sourceType: "csv",
+            recipientKind: "school",
+            lineItems,
+            totalPaid: 0,
+            status: "unpaid",
+          });
+          created += 1;
+        } catch (error) {
+          errors.push(`行${lineNo + 1}: ${error.message}`);
+        }
+      }
+
+      await loadNextInvoiceNo(true);
+      if (errors.length === 0) {
+        alert(`大学・連盟用CSV取込完了: ${created}件作成しました`);
+      } else {
+        alert(`大学・連盟用CSV取込完了: ${created}件作成 / エラー${errors.length}件\n` + errors.slice(0, 5).join("\n"));
+      }
+    }
+
+    async function importCorporateCsv(rawLines) {
+      const header = parseCsvRow(rawLines[0]);
+      const { resolveIdx, resolveIndexed } = buildCsvHeaderContext(header);
+      const issueDateIdx = resolveIdx(["issueDate", "請求日", "発行日"]);
       const closingDateIdx = resolveIdx(["closingDate", "締め日", "締切日", "締切"]);
       const dueDateIdx = resolveIdx(["dueDate", "お支払期限", "お支払い期限", "支払期限", "振込期限"]);
-      const clientNameIdx = resolveIdx(["clientName", "相手先会社名", "相手先", "御中", "請求先", "会社名", "宛名"]);
+      const clientNameIdx = resolveIdx(["clientName", "相手先会社名", "相手先", "会社名"]);
       const invoiceNoIdx = resolveIdx(["invoiceNo", "No.", "No", "番号"]);
       const rateIdx = resolveIdx(["taxRate", "税率"]);
       const baseIdx = resolveIdx(["baseAmount", "10%対象", "税抜金額", "対象金額"]);
@@ -690,51 +816,19 @@
       const zipIdx = resolveIdx(["clientZip", "相手先郵便番号", "郵便番号"]);
       const addressIdx = resolveIdx(["clientAddress", "相手先住所", "住所"]);
       const issuedFlagIdx = resolveIdx(["発行", "発行済", "ok"]);
-      const content1Idx = resolveIdx(["内容1", "内容_1", "内容①", "内容"]);
-      const content2Resolved = resolveIdx(["内容2", "内容_2", "内容②"]);
-      const content2Idx = content2Resolved >= 0 ? content2Resolved : findNextIndex(["内容"], content1Idx);
-      const content3Resolved = resolveIdx(["内容3", "内容_3", "内容③"]);
-      const content3Idx = content3Resolved >= 0 ? content3Resolved : findNextIndex(["内容"], content2Idx >= 0 ? content2Idx : content1Idx);
-      const content4Resolved = resolveIdx(["内容4", "内容_4", "内容④"]);
-      const content4Idx = content4Resolved >= 0 ? content4Resolved : findNextIndex(["内容"], content3Idx >= 0 ? content3Idx : content2Idx);
-      const content5Resolved = resolveIdx(["内容5", "内容_5", "内容⑤"]);
-      const content5Idx = content5Resolved >= 0 ? content5Resolved : findNextIndex(["内容"], content4Idx >= 0 ? content4Idx : content3Idx);
-      const unit1Idx = resolveIdx(["単価1", "単価_1", "単価①", "単価"]);
-      const unit2Resolved = resolveIdx(["単価2", "単価_2", "単価②"]);
-      const unit2Idx = unit2Resolved >= 0 ? unit2Resolved : findNextIndex(["単価"], unit1Idx);
-      const unit3Resolved = resolveIdx(["単価3", "単価_3", "単価③"]);
-      const unit3Idx = unit3Resolved >= 0 ? unit3Resolved : findNextIndex(["単価"], unit2Idx >= 0 ? unit2Idx : unit1Idx);
-      const unit4Resolved = resolveIdx(["単価4", "単価_4", "単価④"]);
-      const unit4Idx = unit4Resolved >= 0 ? unit4Resolved : findNextIndex(["単価"], unit3Idx >= 0 ? unit3Idx : unit2Idx);
-      const unit5Resolved = resolveIdx(["単価5", "単価_5", "単価⑤"]);
-      const unit5Idx = unit5Resolved >= 0 ? unit5Resolved : findNextIndex(["単価"], unit4Idx >= 0 ? unit4Idx : unit3Idx);
-      const qty1Idx = resolveIdx(["数1", "数_1", "数①", "数", "数量1", "数量"]);
-      const qty2Resolved = resolveIdx(["数2", "数_2", "数②", "数量2"]);
-      const qty2Idx = qty2Resolved >= 0 ? qty2Resolved : findNextIndex(["数", "数量"], qty1Idx);
-      const qty3Resolved = resolveIdx(["数3", "数_3", "数③", "数量3"]);
-      const qty3Idx = qty3Resolved >= 0 ? qty3Resolved : findNextIndex(["数", "数量"], qty2Idx >= 0 ? qty2Idx : qty1Idx);
-      const qty4Resolved = resolveIdx(["数4", "数_4", "数④", "数量4"]);
-      const qty4Idx = qty4Resolved >= 0 ? qty4Resolved : findNextIndex(["数", "数量"], qty3Idx >= 0 ? qty3Idx : qty2Idx);
-      const qty5Resolved = resolveIdx(["数5", "数_5", "数⑤", "数量5"]);
-      const qty5Idx = qty5Resolved >= 0 ? qty5Resolved : findNextIndex(["数", "数量"], qty4Idx >= 0 ? qty4Idx : qty3Idx);
-      const amount1Idx = resolveIdx(["金額1", "金額_1", "金額①", "金額"]);
-      const amount2Resolved = resolveIdx(["金額2", "金額_2", "金額②"]);
-      const amount2Idx = amount2Resolved >= 0 ? amount2Resolved : findNextIndex(["金額"], amount1Idx);
-      const amount3Resolved = resolveIdx(["金額3", "金額_3", "金額③"]);
-      const amount3Idx = amount3Resolved >= 0 ? amount3Resolved : findNextIndex(["金額"], amount2Idx >= 0 ? amount2Idx : amount1Idx);
-      const amount4Resolved = resolveIdx(["金額4", "金額_4", "金額④"]);
-      const amount4Idx = amount4Resolved >= 0 ? amount4Resolved : findNextIndex(["金額"], amount3Idx >= 0 ? amount3Idx : amount2Idx);
-      const amount5Resolved = resolveIdx(["金額5", "金額_5", "金額⑤"]);
-      const amount5Idx = amount5Resolved >= 0 ? amount5Resolved : findNextIndex(["金額"], amount4Idx >= 0 ? amount4Idx : amount3Idx);
+      const contentIdxs = resolveIndexed(["内容"], ["内容"]);
+      const unitIdxs = resolveIndexed(["単価"], ["単価"]);
+      const qtyIdxs = resolveIndexed(["数", "数量"], ["数", "数量"]);
+      const amountIdxs = resolveIndexed(["金額"], ["金額"]);
 
       const missing = [];
-      if (isCorporate && closingDateIdx < 0) missing.push("締め日(closingDate)");
+      if (closingDateIdx < 0) missing.push("締め日(closingDate)");
       if (dueDateIdx < 0) missing.push("お支払期限(dueDate)");
       if (clientNameIdx < 0) missing.push("相手先会社名(clientName)");
-      if (isCorporate && zipIdx < 0) missing.push("相手先郵便番号(clientZip)");
-      if (isCorporate && addressIdx < 0) missing.push("相手先住所(clientAddress)");
+      if (zipIdx < 0) missing.push("相手先郵便番号(clientZip)");
+      if (addressIdx < 0) missing.push("相手先住所(clientAddress)");
       if (missing.length > 0) {
-        alert("必須ヘッダーが不足しています: " + missing.join(", "));
+        alert("企業用CSVの必須ヘッダーが不足しています: " + missing.join(", "));
         return;
       }
 
@@ -743,62 +837,38 @@
 
       let created = 0;
       const errors = [];
+      const todayIso = new Date().toISOString().slice(0, 10);
 
       for (let lineNo = 1; lineNo < rawLines.length; lineNo += 1) {
         const row = parseCsvRow(rawLines[lineNo]);
         try {
           const issuedFlag = issuedFlagIdx >= 0 ? getCell(row, issuedFlagIdx).toLowerCase() : "";
-          if (isCorporate && issuedFlag === "ok") {
-            continue;
-          }
-          const todayIso = new Date().toISOString().slice(0, 10);
-          const issueDateVal = issueDateIdx >= 0
-            ? (normalizeDateInput(getCell(row, issueDateIdx)) || todayIso)
-            : todayIso;
-          const closingDateVal = closingDateIdx >= 0 ? normalizeDateInput(getCell(row, closingDateIdx)) : "";
-          const dueDateVal = normalizeDateInput(getCell(row, dueDateIdx));
+          if (issuedFlag === "ok") continue;
+
           const clientNameVal = getCell(row, clientNameIdx);
-          if (!dueDateVal || !clientNameVal) {
-            throw new Error("お支払期限・相手先会社名は必須です");
+          if (!clientNameVal) continue;
+
+          const issueDateVal = issueDateIdx >= 0
+            ? (parseFlexibleDate(getCell(row, issueDateIdx), csvYearHint(todayIso)) || todayIso)
+            : todayIso;
+          const closingDateVal = parseFlexibleDate(getCell(row, closingDateIdx), csvYearHint(issueDateVal));
+          const dueDateVal = parseFlexibleDate(getCell(row, dueDateIdx), csvYearHint(issueDateVal));
+          if (!dueDateVal) {
+            throw new Error("お支払期限は必須です");
           }
-          if (isCorporate && !closingDateVal) {
+          if (!closingDateVal) {
             throw new Error("企業用CSVでは締め日が必須です");
           }
           const zipVal = getCell(row, zipIdx);
           const addressVal = getCell(row, addressIdx);
-          if (isCorporate && (!zipVal || !addressVal)) {
+          if (!zipVal || !addressVal) {
             throw new Error("企業用CSVでは相手先郵便番号・相手先住所が必須です");
           }
 
-          const csvNo = getCell(row, invoiceNoIdx);
-          const invoiceNoVal = csvNo || String(nextNo++);
-
           const taxRateVal = rateIdx >= 0 ? parseTaxRateInput(getCell(row, rateIdx), 10) : 10;
           const safeRate = [0, 8, 10].includes(taxRateVal) ? taxRateVal : 10;
-
-          const unit1 = toNumberOrNaN(getCell(row, unit1Idx));
-          const qty1 = toNumberOrNaN(getCell(row, qty1Idx));
-          const amount1 = toNumberOrNaN(getCell(row, amount1Idx));
-          const unit2 = toNumberOrNaN(getCell(row, unit2Idx));
-          const qty2 = toNumberOrNaN(getCell(row, qty2Idx));
-          const amount2 = toNumberOrNaN(getCell(row, amount2Idx));
-          const unit3 = toNumberOrNaN(getCell(row, unit3Idx));
-          const qty3 = toNumberOrNaN(getCell(row, qty3Idx));
-          const amount3 = toNumberOrNaN(getCell(row, amount3Idx));
-          const unit4 = toNumberOrNaN(getCell(row, unit4Idx));
-          const qty4 = toNumberOrNaN(getCell(row, qty4Idx));
-          const amount4 = toNumberOrNaN(getCell(row, amount4Idx));
-          const unit5 = toNumberOrNaN(getCell(row, unit5Idx));
-          const qty5 = toNumberOrNaN(getCell(row, qty5Idx));
-          const amount5 = toNumberOrNaN(getCell(row, amount5Idx));
-
-          const computedAmount1 = Number.isFinite(amount1) ? amount1 : (Number.isFinite(unit1) && Number.isFinite(qty1) ? unit1 * qty1 : 0);
-          const computedAmount2 = Number.isFinite(amount2) ? amount2 : (Number.isFinite(unit2) && Number.isFinite(qty2) ? unit2 * qty2 : 0);
-          const computedAmount3 = Number.isFinite(amount3) ? amount3 : (Number.isFinite(unit3) && Number.isFinite(qty3) ? unit3 * qty3 : 0);
-          const computedAmount4 = Number.isFinite(amount4) ? amount4 : (Number.isFinite(unit4) && Number.isFinite(qty4) ? unit4 * qty4 : 0);
-          const computedAmount5 = Number.isFinite(amount5) ? amount5 : (Number.isFinite(unit5) && Number.isFinite(qty5) ? unit5 * qty5 : 0);
-          const lineTotal = computedAmount1 + computedAmount2 + computedAmount3 + computedAmount4 + computedAmount5;
-
+          const lineItems = collectLineItemsFromCsv(row, contentIdxs, unitIdxs, qtyIdxs, amountIdxs);
+          const lineTotal = lineItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
           const baseRaw = baseIdx >= 0 ? toNumberOrNaN(getCell(row, baseIdx)) : Number.NaN;
           const totalRaw = totalIdx >= 0 ? toNumberOrNaN(getCell(row, totalIdx)) : Number.NaN;
           const taxRaw = taxAmountIdx >= 0 ? toNumberOrNaN(getCell(row, taxAmountIdx)) : Number.NaN;
@@ -816,17 +886,15 @@
           } else if (lineTotal > 0) {
             calc = calculateTaxBreakdown("tax_included", safeRate, lineTotal);
           } else {
-            throw new Error("ご請求金額(totalAmount) または 明細(金額/単価×数) を入力してください");
+            throw new Error("ご請求金額(totalAmount) または 税抜金額 を入力してください");
           }
 
-          const occurrenceForSave = isCorporate ? calc.baseAmount : calc.occurrenceAmount;
-          const billedForSave = isCorporate ? (calc.baseAmount + calc.taxAmount) : calc.billedAmount;
-          const totalInputForSave = isCorporate ? billedForSave : calc.occurrenceAmount;
-
-          const invoice = {
-            invoiceNo: invoiceNoVal,
+          const billedForSave = calc.baseAmount + calc.taxAmount;
+          const csvNo = getCell(row, invoiceNoIdx);
+          await saveInvoice({
+            invoiceNo: csvNo || String(nextNo++),
             issueDate: issueDateVal,
-            closingDate: isUniversity ? "" : closingDateVal,
+            closingDate: closingDateVal,
             dueDate: dueDateVal,
             clientName: clientNameVal,
             clientContact: getCell(row, contactIdx),
@@ -834,54 +902,23 @@
             clientAddress: addressVal,
             subjectName: getCell(row, subjectIdx),
             category: getCell(row, categoryIdx),
-            requestDepartment: isUniversity ? "財務" : (getCell(row, requestDeptIdx) || ""),
-            description: getCell(row, descriptionIdx) || getCell(row, content1Idx),
+            requestDepartment: getCell(row, requestDeptIdx) || "",
+            description: getCell(row, descriptionIdx) || lineItems.find((item) => item.content)?.content || "",
             taxRate: calc.taxRate,
             baseInput: calc.baseAmount,
-            totalInput: totalInputForSave,
+            totalInput: billedForSave,
             baseAmount: calc.baseAmount,
             taxAmount: calc.taxAmount,
-            occurrenceAmount: occurrenceForSave,
+            occurrenceAmount: calc.baseAmount,
             billedAmount: billedForSave,
-            sourceType: isUniversity ? "csv" : "manual",
-            recipientKind: isUniversity ? "school" : "company",
-            lineItems: [
-              {
-                content: getCell(row, content1Idx),
-                unitPrice: Number.isFinite(unit1) ? unit1 : 0,
-                quantity: Number.isFinite(qty1) ? qty1 : 0,
-                amount: computedAmount1,
-              },
-              {
-                content: getCell(row, content2Idx),
-                unitPrice: Number.isFinite(unit2) ? unit2 : 0,
-                quantity: Number.isFinite(qty2) ? qty2 : 0,
-                amount: computedAmount2,
-              },
-              {
-                content: getCell(row, content3Idx),
-                unitPrice: Number.isFinite(unit3) ? unit3 : 0,
-                quantity: Number.isFinite(qty3) ? qty3 : 0,
-                amount: computedAmount3,
-              },
-              {
-                content: getCell(row, content4Idx),
-                unitPrice: Number.isFinite(unit4) ? unit4 : 0,
-                quantity: Number.isFinite(qty4) ? qty4 : 0,
-                amount: computedAmount4,
-              },
-              {
-                content: getCell(row, content5Idx),
-                unitPrice: Number.isFinite(unit5) ? unit5 : 0,
-                quantity: Number.isFinite(qty5) ? qty5 : 0,
-                amount: computedAmount5,
-              },
-            ],
+            sourceType: "manual",
+            recipientKind: "company",
+            lineItems: lineItems.some((item) => item.content || item.amount)
+              ? lineItems
+              : [{ content: getCell(row, descriptionIdx), unitPrice: calc.baseAmount, quantity: 0, amount: calc.baseAmount }],
             totalPaid: 0,
             status: "unpaid",
-          };
-
-          await saveInvoice(invoice);
+          });
           created += 1;
         } catch (error) {
           errors.push(`行${lineNo + 1}: ${error.message}`);
@@ -890,10 +927,46 @@
 
       await loadNextInvoiceNo(true);
       if (errors.length === 0) {
-        alert(`${isCorporate ? "企業用" : "大学・連盟用"}CSV取込完了: ${created}件作成しました`);
+        alert(`企業用CSV取込完了: ${created}件作成しました`);
       } else {
-        alert(`${isCorporate ? "企業用" : "大学・連盟用"}CSV取込完了: ${created}件作成 / エラー${errors.length}件\n` + errors.slice(0, 5).join("\n"));
+        alert(`企業用CSV取込完了: ${created}件作成 / エラー${errors.length}件\n` + errors.slice(0, 5).join("\n"));
       }
+    }
+
+    async function readCsvText(file) {
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const hasJapanese = (s) => /[ぁ-んァ-ン一-龥]/.test(s);
+      const utf8 = new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
+      if (!utf8.includes("\uFFFD") && hasJapanese(utf8)) return utf8;
+      try {
+        const sjis = new TextDecoder("shift_jis").decode(bytes).replace(/^\uFEFF/, "");
+        if (hasJapanese(sjis)) return sjis;
+      } catch (error) {
+        // Chromium 以外では shift_jis が使えない場合がある
+      }
+      return utf8;
+    }
+
+    async function importCsvInvoices(importType) {
+      const file = csvFileInput.files && csvFileInput.files[0];
+      if (!file) {
+        alert("CSVファイルを選択してください");
+        return;
+      }
+
+      const text = await readCsvText(file);
+      const rawLines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+      if (rawLines.length < 2) {
+        alert("CSVデータが不足しています（ヘッダー+1行以上必要）");
+        return;
+      }
+
+      if (importType === "university") {
+        await importUniversityCsv(rawLines);
+        return;
+      }
+      await importCorporateCsv(rawLines);
     }
 
     baseAmountInput.addEventListener("input", syncFromBase);

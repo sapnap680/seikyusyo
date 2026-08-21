@@ -36,6 +36,7 @@
     .invoice-table td {
       white-space: nowrap;
       vertical-align: middle;
+      text-align: center;
     }
     .invoice-table td.text-wrap {
       white-space: normal;
@@ -65,7 +66,10 @@
   <div class="bg-white/95 backdrop-blur-sm shadow-lg border-b-4 border-cyan-500">
     <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
       <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">請求管理表</h1>
-      <a href="./invoice.html" class="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">請求書作成へ</a>
+      <div class="flex gap-2">
+        <a href="./format.html" class="px-5 py-2 bg-white border-2 border-cyan-500 text-cyan-700 rounded-xl font-bold hover:bg-cyan-50">書式設定</a>
+        <a href="./invoice.html" class="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">請求書作成へ</a>
+      </div>
     </div>
   </div>
 
@@ -81,7 +85,7 @@
           <option value="all">すべて</option>
           <option value="unpaid">未入金</option>
           <option value="paid">入金済</option>
-          <option value="has_deposit">預り金あり</option>
+          <option value="overpaid">過払い</option>
         </select>
         <select id="dueFilter" title="期限状態" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:border-cyan-500 outline-none">
           <option value="all">期限すべて</option>
@@ -143,8 +147,7 @@
         </div>
         <button id="searchRunBtn" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold hover:from-blue-700 hover:to-cyan-700">検索</button>
         <button id="searchClearBtn" class="px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 font-bold hover:bg-gray-300">クリア</button>
-        <button id="reloadBtn" class="px-3 py-1.5 rounded-lg border border-cyan-300 text-cyan-700 font-bold hover:bg-cyan-50">再読込</button>
-        <button type="button" id="openBulkModalBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-amber-500 text-white font-bold hover:bg-amber-600">一括更新</button>
+        <button type="button" id="openBulkModalBtn" class="ml-auto px-3 py-1.5 rounded-lg bg-amber-500 text-white font-bold hover:bg-amber-600">一括選択</button>
       </div>
 
       <div class="overflow-x-auto">
@@ -152,13 +155,13 @@
           <thead>
             <tr class="bg-gradient-to-r from-blue-600 to-cyan-600 text-white">
               <th class="border border-cyan-500 px-2 py-3 text-center font-bold w-10"></th>
-              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">請求番号</th>
-              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">相手先</th>
-              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">科目名</th>
-              <th class="border border-cyan-500 px-3 py-3 text-right font-bold">請求額</th>
-              <th class="border border-cyan-500 px-3 py-3 text-right font-bold">残高</th>
-              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">期限状態</th>
-              <th class="border border-cyan-500 px-3 py-3 text-left font-bold">状態</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">請求番号</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">相手先</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">科目名</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">請求額</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">残高</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">期限状態</th>
+              <th class="border border-cyan-500 px-3 py-3 text-center font-bold">状態</th>
               <th class="border border-cyan-500 px-3 py-3 text-center font-bold">操作</th>
             </tr>
           </thead>
@@ -261,7 +264,7 @@
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
       <div class="bg-gradient-to-r from-blue-600 to-cyan-600 px-5 py-3.5 flex justify-between items-center">
         <div>
-          <h2 class="text-lg font-bold text-white leading-tight">入金・返金・預り金</h2>
+          <h2 class="text-lg font-bold text-white leading-tight">入金・返金</h2>
           <p id="cashflowModalTitle" class="text-xs text-cyan-50/90 mt-0.5"></p>
         </div>
         <button type="button" id="cashflowModalClose" class="text-white/80 hover:text-white text-2xl leading-none">&times;</button>
@@ -273,7 +276,6 @@
         <div class="flex gap-1.5 bg-slate-100 rounded-xl p-1">
           <button type="button" data-cf-tab="collection" class="cf-tab flex-1 py-1.5 rounded-lg text-sm font-bold transition">入金</button>
           <button type="button" data-cf-tab="refund" class="cf-tab flex-1 py-1.5 rounded-lg text-sm font-bold transition">返金</button>
-          <button type="button" data-cf-tab="deposit" class="cf-tab flex-1 py-1.5 rounded-lg text-sm font-bold transition">預り金</button>
         </div>
 
         <div data-cf-panel="collection" class="cf-panel rounded-xl border border-blue-200 bg-blue-50 p-3">
@@ -308,25 +310,6 @@
           <button type="button" id="refundSubmitBtn" class="mt-2.5 w-full px-3 py-2 rounded-lg bg-orange-600 text-white text-sm font-bold hover:bg-orange-700">返金を登録</button>
         </div>
 
-        <div data-cf-panel="deposit" class="cf-panel hidden rounded-xl border border-purple-200 bg-purple-50 p-3">
-          <div class="flex items-center justify-between mb-2.5">
-            <span class="text-sm font-bold text-gray-700">預り金残高</span>
-            <span id="clientDepositBalanceText" class="text-base font-bold text-purple-800">¥0</span>
-          </div>
-          <p class="text-xs text-gray-600 mb-2">過払い分を返金せず預り金へ移します。</p>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs font-bold text-gray-600 mb-1">移動日</label>
-              <input id="toDepositDateInput" type="date" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-purple-500 outline-none">
-            </div>
-            <div>
-              <label class="block text-xs font-bold text-gray-600 mb-1">金額（円）</label>
-              <input id="toDepositAmountInput" type="number" min="1" class="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 focus:border-purple-500 outline-none">
-            </div>
-          </div>
-          <button type="button" id="toDepositBtn" class="mt-2.5 w-full px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-bold hover:bg-purple-700">預り金に移す</button>
-        </div>
-
         <div>
           <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">履歴</h3>
           <ul id="cashflowHistoryList" class="text-sm border border-gray-200 rounded-xl divide-y max-h-40 overflow-y-auto"></ul>
@@ -341,25 +324,6 @@
   <script>
     let invoices = [];
     let cashflowInvoiceId = null;
-    let clientDepositMap = {};
-
-    function normalizeClientKey(clientName) {
-      const raw = String(clientName || "").trim();
-      if (!raw) return "_unknown";
-      return raw.replace(/[\\/]/g, "_").slice(0, 150);
-    }
-
-    function getRowClientDeposit(row) {
-      return clientDepositMap[normalizeClientKey(row.clientName)] || 0;
-    }
-
-    async function loadClientDepositMap() {
-      const deposits = await getAllClientDeposits();
-      clientDepositMap = {};
-      deposits.forEach((row) => {
-        clientDepositMap[normalizeClientKey(row.clientName)] = Number(row.balance || 0);
-      });
-    }
 
     function yen(value) {
       return "¥" + Number(value || 0).toLocaleString("ja-JP");
@@ -378,18 +342,18 @@
       return new Date().toISOString().slice(0, 10);
     }
 
+    function isOverpaid(row) {
+      return calcOverpaid(row) > 0;
+    }
+
     function statusText(row) {
-      const billed = Number(row.billedAmount || 0);
-      const paid = Number(row.totalPaid || 0);
-      if (paid > billed) return "過払い";
+      if (isOverpaid(row)) return "過払い";
       if (row.status === "paid") return "入金済";
       return "未入金";
     }
 
     function statusClass(row) {
-      const billed = Number(row.billedAmount || 0);
-      const paid = Number(row.totalPaid || 0);
-      if (paid > billed) return "bg-purple-100 text-purple-800";
+      if (isOverpaid(row)) return "bg-orange-100 text-orange-800";
       if (row.status === "paid") return "bg-green-100 text-green-800";
       return "bg-red-100 text-red-800";
     }
@@ -406,9 +370,9 @@
       const billed = Number(row.billedAmount || 0);
       const paid = Number(row.totalPaid || 0);
       const diff = paid - billed;
-      if (diff === 0) return '<span class="text-gray-600">±0</span>';
+      if (diff === 0) return '<span class="text-gray-500">なし</span>';
       if (diff > 0) {
-        return `<span class="text-purple-700 font-bold">+${yen(diff).slice(1)}</span>`;
+        return `<span class="text-orange-700 font-bold">過払い ${yen(diff)}</span>`;
       }
       return `<span class="text-red-700 font-bold">-${yen(Math.abs(diff)).slice(1)}</span>`;
     }
@@ -534,10 +498,12 @@
       return invoices
         .filter((row) => {
           let statusOk = true;
-          if (statusFilter === "has_deposit") {
-            statusOk = getRowClientDeposit(row) > 0;
-          } else if (statusFilter !== "all") {
-            statusOk = row.status === statusFilter;
+          if (statusFilter === "overpaid") {
+            statusOk = isOverpaid(row);
+          } else if (statusFilter === "paid") {
+            statusOk = row.status === "paid" && !isOverpaid(row);
+          } else if (statusFilter === "unpaid") {
+            statusOk = row.status === "unpaid";
           }
           if (!statusOk) return false;
           const dueStatus = getDueStatus(row);
@@ -579,21 +545,21 @@
               <td class="border px-2 py-2 text-center align-top">
                 <button type="button" onclick="toggleDetailRow('${row.id}', this)" class="detail-toggle w-7 h-7 rounded-lg text-cyan-700 hover:bg-cyan-100 font-bold" title="詳細を表示">▶</button>
               </td>
-              <td class="border px-3 py-2 align-top whitespace-nowrap">${row.invoiceNo || "-"}${row.memo ? ' <span class="text-purple-600" title="メモあり">📝</span>' : ""}</td>
-              <td class="border px-3 py-2 text-wrap align-top">${row.clientName || "-"}</td>
-              <td class="border px-3 py-2 text-wrap align-top">${row.subjectName || "-"}</td>
-              <td class="border px-3 py-2 text-right align-top">${yen(row.billedAmount)}</td>
-              <td class="border px-3 py-2 text-right font-bold align-top">${yen(remain)}</td>
-              <td class="border px-3 py-2 align-top">
+              <td class="border px-3 py-2 align-top whitespace-nowrap text-center">${row.invoiceNo || "-"}${row.memo ? ' <span class="text-purple-600" title="メモあり">📝</span>' : ""}</td>
+              <td class="border px-3 py-2 text-wrap align-top text-center">${row.clientName || "-"}</td>
+              <td class="border px-3 py-2 text-wrap align-top text-center">${row.subjectName || "-"}</td>
+              <td class="border px-3 py-2 text-center align-top">${yen(row.billedAmount)}</td>
+              <td class="border px-3 py-2 text-center font-bold align-top">${isOverpaid(row) ? `<span class="text-orange-700">${yen(calcOverpaid(row))}</span>` : yen(remain)}</td>
+              <td class="border px-3 py-2 align-top text-center">
                 <span class="px-2 py-1 rounded ${dueStatus.className}">${dueStatus.label}</span>
               </td>
-              <td class="border px-3 py-2 align-top">
+              <td class="border px-3 py-2 align-top text-center">
                 <span class="px-2 py-1 rounded ${statusClass(row)}">${statusText(row)}</span>
               </td>
               <td class="border px-3 py-2 text-center align-top whitespace-nowrap">
                 <div class="inline-flex items-center gap-1">
                   <button onclick="editInvoice('${row.id}')" class="px-2 py-1 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-sm font-bold hover:from-blue-700 hover:to-cyan-700">編集</button>
-                  <button onclick="openCashflowModal('${row.id}')" class="px-2 py-1 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700">入金・預り金</button>
+                  <button onclick="openCashflowModal('${row.id}')" class="px-2 py-1 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700">入金・返金</button>
                   <button type="button" onclick="openRowMenu(event, '${row.id}', '${safeNo}')" class="px-2 py-1 rounded-lg bg-gray-200 text-gray-700 text-sm font-bold hover:bg-gray-300" title="その他の操作">…</button>
                 </div>
               </td>
@@ -730,7 +696,6 @@
             status: deriveStatus(totalPaid, billed),
           };
         });
-        await loadClientDepositMap();
         render();
       } catch (error) {
         console.error(error);
@@ -761,18 +726,15 @@
     async function renderCashflowSummary(row) {
       const remain = calcRemaining(row);
       const over = calcOverpaid(row);
-      const depositBalance = await getClientDepositBalance(row.clientName);
       document.getElementById("cashflowModalSummary").innerHTML =
         cashflowStatCard("請求額", yen(row.billedAmount)) +
-        cashflowStatCard("入金済（純額）", yen(row.totalPaid), "text-blue-700") +
-        cashflowStatCard("未入金残高", yen(remain), remain > 0 ? "text-rose-600" : "text-emerald-600") +
-        cashflowStatCard("過払い", yen(over), over > 0 ? "text-orange-600" : "text-gray-900") +
-        cashflowStatCard("取引先の預り金", yen(depositBalance), "text-purple-700") +
-        cashflowStatCard("入金日 / 返金日", `${normalizeDateInput(row.collectionDate) || "-"} / ${normalizeDateInput(row.refundDate) || "-"}`);
-      document.getElementById("clientDepositBalanceText").textContent = yen(depositBalance);
+        cashflowStatCard("入金済", yen(row.totalPaid), "text-blue-700") +
+        cashflowStatCard("未入金", yen(remain), remain > 0 ? "text-rose-600" : "text-emerald-600") +
+        cashflowStatCard("過払い", over > 0 ? yen(over) : "なし", over > 0 ? "text-orange-600" : "text-gray-500") +
+        cashflowStatCard("入金日", normalizeDateInput(row.collectionDate) || "-") +
+        cashflowStatCard("返金日", normalizeDateInput(row.refundDate) || "-");
       document.getElementById("collectionAmountInput").value = remain > 0 ? String(remain) : "";
       document.getElementById("refundAmountInput").value = over > 0 ? String(over) : "";
-      document.getElementById("toDepositAmountInput").value = over > 0 ? String(over) : "";
     }
 
     async function renderCashflowHistory(invoiceId) {
@@ -832,7 +794,6 @@
       if (note === null) return;
       try {
         await updatePaymentEntry(paymentId, { paidDate: dateStr.trim(), amount, note });
-        await loadClientDepositMap();
         await refreshCashflowModal();
         render();
         alert("入出金の内容を変更しました");
@@ -847,7 +808,6 @@
       if (!ok) return;
       try {
         await deletePaymentEntry(paymentId);
-        await loadClientDepositMap();
         await refreshCashflowModal();
         render();
         alert("入出金操作を取り消しました");
@@ -876,7 +836,6 @@
       const today = todayIso();
       document.getElementById("collectionDateInput").value = normalizeDateInput(row.collectionDate) || today;
       document.getElementById("refundDateInput").value = normalizeDateInput(row.refundDate) || today;
-      document.getElementById("toDepositDateInput").value = today;
       await renderCashflowSummary(row);
       await renderCashflowHistory(invoiceId);
       setCashflowTab("collection");
@@ -971,39 +930,6 @@
       } catch (error) {
         console.error(error);
         alert("返金登録に失敗しました: " + error.message);
-      }
-    }
-
-    async function submitToDeposit() {
-      if (!cashflowInvoiceId) return;
-      const row = getCashflowRow();
-      if (!row) return;
-      const amount = Number(document.getElementById("toDepositAmountInput").value);
-      const paidDate = document.getElementById("toDepositDateInput").value;
-      if (!paidDate) {
-        alert("移動日を入力してください");
-        return;
-      }
-      if (!Number.isFinite(amount) || amount <= 0) {
-        alert("金額は1円以上で入力してください");
-        return;
-      }
-      const over = calcOverpaid(row);
-      if (amount > over) {
-        alert(`過払い分（${yen(over)}）を超えて預り金に移動できません`);
-        return;
-      }
-      const ok = confirm(`${yen(amount)} を預り金に移しますか？\n（この請求の過払い表示が解消され、取引先の預り金残高が増えます）`);
-      if (!ok) return;
-      try {
-        await moveOverpaymentToDeposit(cashflowInvoiceId, amount, paidDate);
-        await refreshCashflowModal();
-        await loadClientDepositMap();
-        render();
-        alert(`預り金に移しました（${yen(amount)}）`);
-      } catch (error) {
-        console.error(error);
-        alert("預り金への移動に失敗しました: " + error.message);
       }
     }
 
@@ -1194,7 +1120,6 @@
             }
           }
         }
-        await loadClientDepositMap();
         await loadInvoices();
         if (collectionDate && settledCount > 0) {
           alert(`一括更新が完了しました（${targets.length}件）\n全額入金を登録: ${settledCount}件\n入金日のみ更新: ${dateOnlyCount}件`);
@@ -1389,7 +1314,6 @@
       }
     }
 
-    document.getElementById("reloadBtn").addEventListener("click", loadInvoices);
     document.getElementById("statusFilter").addEventListener("change", render);
     document.getElementById("dueFilter").addEventListener("change", render);
     document.getElementById("searchRunBtn").addEventListener("click", render);
@@ -1432,7 +1356,6 @@
     document.getElementById("collectionPartialBtn").addEventListener("click", submitPartialCollection);
     document.getElementById("collectionFullBtn").addEventListener("click", submitFullCollection);
     document.getElementById("refundSubmitBtn").addEventListener("click", submitRefund);
-    document.getElementById("toDepositBtn").addEventListener("click", submitToDeposit);
     document.querySelectorAll(".cf-tab").forEach((tab) => {
       tab.addEventListener("click", () => setCashflowTab(tab.dataset.cfTab));
     });

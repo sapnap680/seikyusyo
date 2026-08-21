@@ -62,6 +62,46 @@ async function saveInvoiceNumberStart(startNumber) {
   }, { merge: true });
 }
 
+const DEFAULT_INVOICE_FORMAT = {
+  orgName: "一般財団法人全日本大学バスケットボール連盟",
+  zip: "150-0002",
+  address1: "東京都渋谷区渋谷3-17-2",
+  address2: "清澤ビル6階",
+  tel: "03-5459-3557",
+  fax: "03-5459-3558",
+  email: "jubf.zaimu@gmail.com",
+  registrationNo: "T8-0110-0500-7501",
+  bankName: "みずほ銀行",
+  branchName: "渋谷中央支店",
+  accountType: "普通預金",
+  accountNumber: "1870255",
+  accountNameKana: "ザイ）ゼンニホンダイガクバスケットボールレンメイ ダイヒョウ",
+  accountHolder: "ウエマツマサヒロ",
+};
+
+function mergeInvoiceFormat(data) {
+  const src = data && typeof data === "object" ? data : {};
+  const merged = { ...DEFAULT_INVOICE_FORMAT };
+  Object.keys(DEFAULT_INVOICE_FORMAT).forEach((key) => {
+    if (src[key] != null && String(src[key]).trim() !== "") {
+      merged[key] = String(src[key]).trim();
+    }
+  });
+  return merged;
+}
+
+async function getInvoiceFormat() {
+  const doc = await db.collection("settings").doc("invoiceFormat").get();
+  return mergeInvoiceFormat(doc.exists ? doc.data() : {});
+}
+
+async function saveInvoiceFormat(format) {
+  const payload = mergeInvoiceFormat(format);
+  payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  await db.collection("settings").doc("invoiceFormat").set(payload, { merge: true });
+  return payload;
+}
+
 async function reserveNextInvoiceNumber() {
   const ref = db.collection("settings").doc("invoiceNumber");
   const next = await db.runTransaction(async (tx) => {

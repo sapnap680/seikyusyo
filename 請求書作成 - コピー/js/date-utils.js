@@ -63,6 +63,29 @@ function normalizeDateInput(value) {
   return "";
 }
 
+function parseFlexibleDate(value, yearHint) {
+  const normalized = normalizeDateInput(value);
+  if (normalized) return normalized;
+
+  const v = String(value ?? "").trim().replace(/\uFEFF/g, "");
+  if (!v) return "";
+
+  const year = Number(yearHint);
+  const y = Number.isFinite(year) && year >= 2000 ? year : new Date().getFullYear();
+
+  const mdJa = v.match(/^(\d{1,2})\s*月\s*(\d{1,2})\s*日/);
+  if (mdJa) {
+    return `${y}-${String(mdJa[1]).padStart(2, "0")}-${String(mdJa[2]).padStart(2, "0")}`;
+  }
+
+  const md = v.match(/^(\d{1,2})[\/.\-](\d{1,2})$/);
+  if (md) {
+    return `${y}-${String(md[1]).padStart(2, "0")}-${String(md[2]).padStart(2, "0")}`;
+  }
+
+  return "";
+}
+
 function parseDateOnly(value) {
   const iso = normalizeDateInput(value);
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;

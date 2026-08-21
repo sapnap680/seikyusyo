@@ -75,8 +75,11 @@
     .ajimi-stamp {
       left: calc(50% - 5.35mm);
     }
-    .header-right {
-      position: relative;
+    .org-line,
+    #bankInfoMain,
+    #bankAccountKana,
+    #bankAccountHolder {
+      white-space: pre-line;
     }
     .federation-stamp {
       width: 32mm;
@@ -111,11 +114,11 @@
       line-height: 1.35;
       word-break: keep-all;
       overflow-wrap: normal;
-      display: block;
-      border-bottom: 1.2px solid #000;
-      padding-bottom: 0.8mm;
-      width: auto;
+      display: inline-block;
+      width: fit-content;
       max-width: 95mm;
+      border-bottom: 1.2px solid #000;
+      padding: 0 1.5mm 0.8mm;
       font-family: "Yu Gothic", "游ゴシック", "YuGothic", "Meiryo", "Hiragino Kaku Gothic ProN", sans-serif !important;
     }
     /* 宛名は基本1行。長い場合のみ JS で縮小し、それでも足りないとき折り返し */
@@ -123,10 +126,13 @@
       white-space: nowrap;
       word-break: keep-all;
       overflow-wrap: normal;
-      width: auto;
+      display: inline-block;
+      width: fit-content;
       max-width: 95mm;
       line-height: 1.35;
       letter-spacing: 0.02em;
+      border-bottom: 1.2px solid #000;
+      padding: 0 1.5mm 0.8mm;
     }
     #recipientTitle.recipient-wrap {
       white-space: normal;
@@ -226,7 +232,7 @@
     }
     #sheet.csv-mode .header-right .org-line {
       text-align: left !important;
-      white-space: normal;
+      white-space: pre-line;
       overflow-wrap: anywhere;
       word-break: break-word;
       line-height: 1.5;
@@ -283,8 +289,23 @@
       margin-top: 3mm;
     }
     #tableManual .csv-table {
+      width: 100%;
+      table-layout: fixed;
       font-size: 18px;
       font-weight: 700;
+    }
+    #tableManual .csv-table th:nth-child(1),
+    #tableManual .csv-table td:nth-child(1) {
+      width: 28%;
+    }
+    #tableManual .csv-table th:nth-child(2),
+    #tableManual .csv-table td:nth-child(2) {
+      width: 26%;
+    }
+    #tableManual .csv-table th:nth-child(3),
+    #tableManual .csv-table td:nth-child(3) {
+      width: 46%;
+      overflow: hidden;
     }
     #tableManual .csv-table th {
       font-size: 17px;
@@ -306,9 +327,39 @@
     }
     #tableManual #manualDescription,
     #tableManual #description {
-      font-size: 17px;
-      line-height: 1.5;
+      font-size: 15px;
+      line-height: 1.7;
+      font-weight: 700;
+      text-align: center;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: anywhere;
+      line-break: strict;
+      text-wrap: pretty;
+      letter-spacing: 0.02em;
+    }
+    #tableManual #description {
+      display: block;
+      max-width: 100%;
+    }
+    #tableManual .remark-keep {
       word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    #sheet:not(.csv-mode) .invoice-title-block {
+      padding-top: 5mm;
+      padding-bottom: 5mm;
+    }
+    #sheet:not(.csv-mode) .invoice-title-label {
+      line-height: 1.15;
+    }
+    #sheet:not(.csv-mode) #issueDate {
+      display: block;
+      margin-top: 8mm !important;
+      font-size: 14px;
+    }
+    #sheet:not(.csv-mode) .stamp-area {
+      display: none !important;
     }
 
     /* 企業向け: 振込先情報を大きく */
@@ -514,20 +565,20 @@
         </div>
         <div class="text-sm text-right leading-6 header-right">
           <div id="manualOrgInfo">
-            <div class="org-line">〒150-0002</div>
-            <div class="org-line">東京都渋谷区渋谷3-17-2</div>
-            <div class="org-line">清澤ビル6階</div>
-            <div class="org-line">一般財団法人全日本大学バスケットボール連盟</div>
-            <div class="org-line">TEL 03-5459-3557</div>
-            <div class="org-line">FAX 03-5459-3558</div>
+            <div id="orgZipManual" class="org-line">〒150-0002</div>
+            <div id="orgAddress1Manual" class="org-line">東京都渋谷区渋谷3-17-2</div>
+            <div id="orgAddress2Manual" class="org-line">清澤ビル6階</div>
+            <div id="orgNameManual" class="org-line">一般財団法人全日本大学バスケットボール連盟</div>
+            <div id="orgTelManual" class="org-line">TEL 03-5459-3557</div>
+            <div id="orgFaxManual" class="org-line">FAX 03-5459-3558</div>
           </div>
           <div id="csvOrgInfo" class="hidden">
-            <div class="org-line">一般財団法人全日本大学バスケットボール連盟</div>
-            <div class="org-line">登録番号：T8011005007501</div>
-            <div class="org-line">〒150-0002</div>
-            <div class="org-line">東京都渋谷区渋谷3-17-2</div>
-            <div class="org-line">清澤ビル6階</div>
-            <div class="org-line">℡03-5459-3557</div>
+            <div id="orgNameCsv" class="org-line">一般財団法人全日本大学バスケットボール連盟</div>
+            <div id="orgRegCsv" class="org-line">登録番号：T8011005007501</div>
+            <div id="orgZipCsv" class="org-line">〒150-0002</div>
+            <div id="orgAddress1Csv" class="org-line">東京都渋谷区渋谷3-17-2</div>
+            <div id="orgAddress2Csv" class="org-line">清澤ビル6階</div>
+            <div id="orgTelCsv" class="org-line">℡03-5459-3557</div>
             <div id="federationEmail" class="org-line">✉jubf.zaimu@gmail.com</div>
           </div>
           <div class="mt-3">
@@ -542,7 +593,7 @@
         </div>
       </div>
 
-      <div class="text-center border-y py-4">
+      <div class="text-center border-y py-4 invoice-title-block">
         <div class="text-4xl font-bold tracking-widest invoice-title-label">請求書</div>
         <div id="issueDate" class="text-sm mt-1"></div>
         <div id="closingDateRow" class="text-sm mt-1">締め日 <span id="closingDate"></span></div>
@@ -633,10 +684,11 @@
       </div>
 
       <div id="bankInfo" class="text-sm text-gray-700 pt-3 border-t leading-7 font-semibold">
-        ■振込先情報 みずほ銀行 渋谷中央支店 普通預金 1870255<br>
-        ザイ）ゼンニホンダイガクバスケットボールレンメイ ダイヒョウ<br>
-        ウエマツマサヒロ<br>
+        <div id="bankInfoMain">■振込先情報 みずほ銀行 渋谷中央支店 普通預金 1870255</div>
+        <div id="bankAccountKana">ザイ）ゼンニホンダイガクバスケットボールレンメイ ダイヒョウ</div>
+        <div id="bankAccountHolder">ウエマツマサヒロ</div>
         <span id="bankTransferFeeNote">※お振込み手数料は貴社ご負担にてお願いいたします。</span>
+      </div>
       </div>
       </div>
 
@@ -679,9 +731,100 @@
   <script src="./js/date-utils.js"></script>
   <script>
     let currentPdfName = "請求書";
+    let invoiceFormat = typeof DEFAULT_INVOICE_FORMAT === "object" ? { ...DEFAULT_INVOICE_FORMAT } : {};
+
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value || "";
+    }
+
+    function formatZipDisplay(zip) {
+      const z = String(zip || "").trim();
+      if (!z) return "";
+      return z.startsWith("〒") ? z : `〒${z}`;
+    }
+
+    function compactRegistrationNo(value) {
+      return String(value || "").replace(/[-\s]/g, "");
+    }
+
+    function applyInvoiceFormat(format) {
+      invoiceFormat = format || invoiceFormat;
+      const f = invoiceFormat;
+      const zip = formatZipDisplay(f.zip);
+      const tel = String(f.tel || "").trim();
+      const fax = String(f.fax || "").trim();
+      const email = String(f.email || "").trim();
+      const reg = String(f.registrationNo || "").trim();
+      const compactReg = compactRegistrationNo(reg);
+
+      setText("registrationNo", reg ? `登録番号 ${reg}` : "");
+      setText("orgZipManual", zip);
+      setText("orgAddress1Manual", f.address1);
+      setText("orgAddress2Manual", f.address2);
+      setText("orgNameManual", f.orgName);
+      setText("orgTelManual", tel ? `TEL ${tel}` : "");
+      setText("orgFaxManual", fax ? `FAX ${fax}` : "");
+
+      setText("orgNameCsv", f.orgName);
+      setText("orgRegCsv", compactReg ? `登録番号：${compactReg}` : (reg ? `登録番号：${reg}` : ""));
+      setText("orgZipCsv", zip);
+      setText("orgAddress1Csv", f.address1);
+      setText("orgAddress2Csv", f.address2);
+      setText("orgTelCsv", tel ? `℡${tel}` : "");
+      setText("federationEmail", email ? `✉${email}` : "");
+
+      const bankLine = ["■振込先情報", f.bankName, f.branchName, f.accountType, f.accountNumber]
+        .filter((part) => String(part || "").trim())
+        .join(" ");
+      setText("bankInfoMain", bankLine);
+      setText("bankAccountKana", f.accountNameKana);
+      setText("bankAccountHolder", f.accountHolder);
+    }
 
     function yen(value) {
       return "¥" + Number(value || 0).toLocaleString("ja-JP");
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function formatRemarkChunk(chunk) {
+      const re = /([A-Za-z0-9][A-Za-z0-9.,+\-/%:]*)|([^A-Za-z0-9]+)/g;
+      let html = "";
+      let match;
+      while ((match = re.exec(chunk)) !== null) {
+        if (match[1]) {
+          html += `<span class="remark-keep">${escapeHtml(match[1])}</span>`;
+        } else {
+          html += escapeHtml(match[2])
+            .replace(/([、。・／/,])/g, "$1<wbr>")
+            .replace(/(として|について|における|および|または)/g, "$1<wbr>");
+        }
+      }
+      return html;
+    }
+
+    function formatRemarkHtml(text) {
+      const raw = String(text || "").replace(/\r\n/g, "\n").trim();
+      if (!raw) return "";
+      return raw
+        .split(/\n+|[ \t\u3000]+/)
+        .filter((chunk) => chunk.length > 0)
+        .map((chunk) => formatRemarkChunk(chunk))
+        .join("<br>");
+    }
+
+    function setDescriptionText(text) {
+      const el = document.getElementById("description");
+      if (!el) return;
+      el.innerHTML = formatRemarkHtml(text);
     }
 
     function getFiscalYearTwoDigits(issueDate) {
@@ -792,10 +935,14 @@
       }).join("");
     }
 
+    function isSchoolInvoice(row) {
+      if (row.recipientKind === "school") return true;
+      if (row.recipientKind === "company") return false;
+      return row.sourceType === "csv";
+    }
+
     function getRecipientHonorific(row) {
-      if (row.recipientKind === "school") return "貴学";
-      if (row.recipientKind === "company") return "貴社";
-      return row.sourceType === "csv" ? "貴学" : "貴社";
+      return isSchoolInvoice(row) ? "貴学" : "貴社";
     }
 
     function setBankTransferFeeNote(row) {
@@ -807,7 +954,7 @@
     }
 
     function toggleFormatBySource(row) {
-      const isCsv = row.sourceType === "csv";
+      const isCsv = isSchoolInvoice(row);
       document.getElementById("introManual").classList.toggle("hidden", isCsv);
       document.getElementById("introCsv").classList.toggle("hidden", !isCsv);
       document.getElementById("tableManual").classList.toggle("hidden", isCsv);
@@ -815,7 +962,8 @@
       document.getElementById("sheet").classList.toggle("csv-mode", isCsv);
       document.getElementById("closingDateRow").classList.toggle("hidden", isCsv);
       document.getElementById("invoiceNoLabel").textContent = isCsv ? "No." : "財 No";
-      document.getElementById("registrationNo").textContent = "登録番号 T8-0110-0500-7501";
+      const reg = String((invoiceFormat && invoiceFormat.registrationNo) || "").trim();
+      document.getElementById("registrationNo").textContent = reg ? `登録番号 ${reg}` : "";
       document.getElementById("registrationNo").classList.toggle("hidden", isCsv);
       document.getElementById("manualOrgInfo").classList.toggle("hidden", isCsv);
       document.getElementById("csvOrgInfo").classList.toggle("hidden", !isCsv);
@@ -829,7 +977,7 @@
       document.getElementById("manualOccurrenceAmount").textContent = yen(row.occurrenceAmount);
       document.getElementById("manualTaxAmount").textContent = yen(row.taxAmount);
       document.getElementById("manualTotalAmount").textContent = yen(row.billedAmount);
-      document.getElementById("description").textContent = row.description || "";
+      setDescriptionText(row.description);
       if (Number.isFinite(taxRate)) {
         taxLabel.innerHTML = `今回消費税（<span id="taxRate">${taxRate}</span>%）`;
       } else {
@@ -962,6 +1110,16 @@
     }
 
     async function loadInvoice() {
+      try {
+        invoiceFormat = await getInvoiceFormat();
+      } catch (error) {
+        console.warn("書式設定の読み込み:", error);
+        invoiceFormat = typeof mergeInvoiceFormat === "function"
+          ? mergeInvoiceFormat({})
+          : invoiceFormat;
+      }
+      applyInvoiceFormat(invoiceFormat);
+
       const params = new URLSearchParams(window.location.search);
       if (params.get("hideStamp") === "1") {
         document.getElementById("sheet").classList.add("hide-stamp-area");
@@ -1004,7 +1162,7 @@
           : "当連盟担当";
         document.getElementById("clientZip").textContent = row.clientZip ? `〒${row.clientZip}` : "";
         document.getElementById("clientAddress").textContent = row.clientAddress || "";
-        document.getElementById("description").textContent = row.description || "";
+        setDescriptionText(row.description);
         document.getElementById("billedAmount").textContent = yen(row.billedAmount);
         const issueDateText = "請求日 " + formatDateJa(row.issueDate);
         document.getElementById("issueDate").textContent = issueDateText;
@@ -1050,7 +1208,7 @@
           : "当連盟担当";
         document.getElementById("clientZip").textContent = row.clientZip ? `〒${row.clientZip}` : "";
         document.getElementById("clientAddress").textContent = row.clientAddress || "";
-        document.getElementById("description").textContent = row.description || "";
+        setDescriptionText(row.description);
         document.getElementById("billedAmount").textContent = yen(row.billedAmount);
         renderManualRows(row);
         renderLineItems(row);
@@ -1073,7 +1231,7 @@
       document.getElementById("issueDate").textContent = "発行日 " + (row.issueDate || "-");
       document.getElementById("closingDate").textContent = row.closingDate || "-";
       document.getElementById("dueDate").textContent = row.dueDate || "-";
-      const isCsv = row.sourceType === "csv";
+      const isCsv = isSchoolInvoice(row);
       currentPdfName = buildPdfFileName(row.issueDate, row.invoiceNo, row.clientName);
       document.title = currentPdfName;
       document.getElementById("federationContactLine").textContent = row.clientContact
@@ -1081,7 +1239,7 @@
         : "当連盟担当";
       document.getElementById("clientZip").textContent = row.clientZip ? `〒${row.clientZip}` : "";
       document.getElementById("clientAddress").textContent = row.clientAddress || "";
-      document.getElementById("description").textContent = row.description || "";
+      setDescriptionText(row.description);
       document.getElementById("billedAmount").textContent = yen(row.billedAmount);
 
       if (isCsv) {
