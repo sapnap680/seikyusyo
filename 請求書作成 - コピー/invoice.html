@@ -69,7 +69,7 @@
         <h2 class="font-bold text-gray-800 mb-2">CSV一括作成</h2>
         <p class="text-sm text-gray-700 mb-1">CSVからまとめて請求書を作成できます。ボタンで形式が分かれます。</p>
         <ul class="text-sm text-gray-700 mb-3 list-disc pl-5 space-y-1">
-          <li><span class="font-bold text-emerald-700">大学・連盟用</span>：宛名・お支払期限・内容/単価/数/金額の明細CSV（貴学・明細表。依頼部署は「財務」、締め日は空）</li>
+          <li><span class="font-bold text-emerald-700">大学・連盟用</span>：お支払期限・宛名・<strong>税率</strong>・内容1/単価/数/金額の明細CSV（税率は内容1の直前。貴学・明細表）</li>
           <li><span class="font-bold text-indigo-700">企業用</span>：締め日・相手先住所・税抜金額などの企業CSV（貴社・3行表）</li>
         </ul>
         <div class="flex flex-wrap gap-3 items-center">
@@ -642,9 +642,11 @@
     function parseTaxRateInput(value, fallback = 10) {
       const raw = String(value ?? "").trim();
       if (!raw) return fallback;
+      if (/不課税|非課税|免税/.test(raw)) return 0;
       const normalized = raw
         .replace(/[％%]/g, "")
         .replace(/消費税/g, "")
+        .replace(/対象/g, "")
         .trim();
       const n = Number(normalized);
       return Number.isFinite(n) ? n : fallback;
@@ -710,11 +712,19 @@
       const clientNameIdx = resolveIdx(["宛名", "clientName", "相手先", "請求先", "御中"]);
       const issueDateIdx = resolveIdx(["issueDate", "請求日", "発行日"]);
       const invoiceNoIdx = resolveIdx(["invoiceNo", "No.", "No", "番号"]);
-      const rateIdx = resolveIdx(["taxRate", "税率"]);
       const contentIdxs = resolveIndexed(["内容"], ["内容"], 5, false);
       const unitIdxs = resolveIndexed(["単価"], ["単価"], 5, false);
       const qtyIdxs = resolveIndexed(["数", "数量"], ["数", "数量"], 5, false);
       const amountIdxs = resolveIndexed(["金額"], ["金額"], 5, false);
+      let rateIdx = resolveIdx(["taxRate", "税率", "消費税率"]);
+      const content1Idx = contentIdxs[0];
+      if (rateIdx < 0 && content1Idx > 0) {
+        const beforeName = normalizeHeaderName(header[content1Idx - 1] || "");
+        const reserved = new Set(["お支払期限", "お支払い期限", "支払期限", "振込期限", "duedate", "宛名", "clientname", "相手先", "請求先", "御中", "請求日", "発行日", "issuedate"]);
+        if (beforeName && !reserved.has(beforeName)) {
+          rateIdx = content1Idx - 1;
+        }
+      }
 
       const missing = [];
       if (dueDateIdx < 0) missing.push("お支払期限");
