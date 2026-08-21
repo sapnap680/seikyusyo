@@ -420,7 +420,8 @@
     #sheet.csv-mode .csv-table tbody td {
       font-weight: 700;
       vertical-align: middle;
-      height: 11mm;
+      height: auto;
+      min-height: 11mm;
     }
     #sheet.csv-mode .csv-table tbody tr:nth-child(odd) td {
       background: #fef2ec;
@@ -434,8 +435,9 @@
       text-align: center !important;
     }
     #sheet.csv-mode .csv-table td:nth-child(1) {
-      white-space: normal;
-      word-break: break-word;
+      white-space: pre-line;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
       line-height: 1.35;
     }
     #sheet.csv-mode .csv-table th:nth-child(2),
@@ -664,7 +666,7 @@
 
       <div id="introCsv" class="border p-5 text-center hidden">
         <div class="csv-intro-note text-sm text-gray-700 mb-1">下記の通り、ご請求申し上げます。</div>
-        <div class="csv-intro-note text-sm text-gray-700 mb-1">以下の期限までのお支払いをお願い致します。</div>
+        <div class="csv-intro-note text-sm text-gray-700 mb-1">上記の期限までのお支払いをお願い致します。</div>
         <div id="billedAmountCsv" class="text-4xl font-bold">¥0</div>
       </div>
 
@@ -1034,7 +1036,10 @@
       }
       const body = document.getElementById("lineItemsBody");
       body.innerHTML = items.map((item) => {
-        const content = (item.content || "").trim() || "-";
+        const rawContent = String(item.content || "").replace(/\r\n/g, "\n").trim();
+        const content = rawContent
+          ? escapeHtml(rawContent).replace(/[ \t\u3000\n]+/g, "<br>")
+          : "-";
         const unitValue = Number(item.unitPrice || 0);
         const amountValue = Number(item.amount || 0);
         const hasQuantity = item.quantity !== undefined && item.quantity !== null && String(item.quantity).trim() !== "";
