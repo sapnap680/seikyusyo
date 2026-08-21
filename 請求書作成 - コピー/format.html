@@ -117,7 +117,8 @@
 
       <div class="flex flex-wrap gap-3">
         <button type="submit" id="saveBtn" class="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold hover:from-blue-700 hover:to-cyan-700 shadow-md">保存</button>
-        <button type="button" id="previewBtn" class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:from-cyan-700 hover:to-cyan-700 shadow-md">印刷プレビュー</button>
+        <button type="button" id="previewManualBtn" class="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold hover:from-cyan-700 hover:to-blue-700 shadow-md">企業用プレビュー</button>
+        <button type="button" id="previewCsvBtn" class="px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-md">大学用プレビュー</button>
       </div>
     </form>
   </div>
@@ -148,7 +149,7 @@
       const f = data || {};
       const line1Parts = [f.bankName, f.branchName, f.accountType, f.accountNumber]
         .filter((part) => String(part || "").trim());
-      const line1 = line1Parts.length ? ["■振込先情報", ...line1Parts].join(" ") : "";
+      const line1 = line1Parts.length ? `■振込先情報\n${line1Parts.join(" ")}` : "";
       const el = document.getElementById("printBankPreview");
       if (el) {
         el.textContent = [line1, f.accountNameKana, f.accountHolder].filter(Boolean).join("\n");
@@ -192,12 +193,25 @@
       }
     });
 
-    document.getElementById("previewBtn").addEventListener("click", async () => {
+    async function openPreview(mockType) {
+      const saved = await saveInvoiceFormat(readForm());
+      rememberFormat(saved);
+      const fmt = encodeURIComponent(JSON.stringify(saved));
+      window.open("./invoice-print.html?mock=" + mockType + "&t=" + Date.now() + "&fmt=" + fmt, "_blank");
+    }
+
+    document.getElementById("previewManualBtn").addEventListener("click", async () => {
       try {
-        const saved = await saveInvoiceFormat(readForm());
-        rememberFormat(saved);
-        const fmt = encodeURIComponent(JSON.stringify(saved));
-        window.open("./invoice-print.html?mock=manual&t=" + Date.now() + "&fmt=" + fmt, "_blank");
+        await openPreview("manual");
+      } catch (error) {
+        console.error(error);
+        alert("プレビュー用の保存に失敗しました: " + error.message);
+      }
+    });
+
+    document.getElementById("previewCsvBtn").addEventListener("click", async () => {
+      try {
+        await openPreview("csv");
       } catch (error) {
         console.error(error);
         alert("プレビュー用の保存に失敗しました: " + error.message);

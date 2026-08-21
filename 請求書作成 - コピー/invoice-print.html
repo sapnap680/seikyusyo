@@ -80,12 +80,17 @@
     .header-right {
       position: relative;
       overflow: visible;
+      max-width: 95mm;
+      min-width: 0;
     }
     .org-line,
     #bankInfoMain,
     #bankAccountKana,
     #bankAccountHolder {
       white-space: pre-line;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
     }
     .federation-stamp {
       position: absolute;
@@ -227,8 +232,10 @@
       position: relative;
       overflow: visible;
       background: #d9d9d9;
-      padding: 2.6mm 3.2mm;
-      width: auto;
+      padding: 2.6mm 34mm 2.6mm 3.2mm;
+      width: 88mm;
+      max-width: 88mm;
+      min-width: 0;
       flex: none;
       margin-left: 0;
       box-sizing: border-box;
@@ -381,6 +388,10 @@
       padding-top: 5mm !important;
       margin-top: 2mm;
       letter-spacing: 0.02em;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     #bankInfo #bankTransferFeeNote {
       font-size: 15px;
@@ -444,13 +455,15 @@
       font-size: 15px;
     }
     #sheet.csv-mode #csvSummary {
-      margin-top: 2.5mm;
+      margin-top: 0;
       margin-left: 0;
-      float: right;
+      float: none;
       width: 86mm;
+      max-width: 86mm;
       display: flex;
       flex-direction: column;
       gap: 2.2mm;
+      flex: none;
     }
     #sheet.csv-mode .csv-total-box {
       border: 1.2px solid #000;
@@ -483,16 +496,45 @@
       text-align: right;
       font-size: 16px;
     }
+    #sheet.csv-mode .after-tables {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 86mm;
+      align-items: start;
+      column-gap: 6mm;
+      margin-top: 2.5mm;
+    }
     #sheet.csv-mode #bankInfo {
       border-top: 0;
-      padding-top: 3mm;
-      color: #000;
-      line-height: 1.55;
-      font-size: 12px;
-      font-weight: 600;
-      width: calc(100% - 92mm);
-      min-height: 56mm;
+      padding-top: 0 !important;
+      margin-top: 0;
+      color: #000 !important;
+      line-height: 1.5 !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0 !important;
+      width: auto !important;
+      max-width: 100%;
+      min-width: 0;
+      min-height: 0;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      box-sizing: border-box;
+    }
+    #sheet.csv-mode #bankInfoMain,
+    #sheet.csv-mode #bankAccountKana,
+    #sheet.csv-mode #bankAccountHolder,
+    #sheet.csv-mode #bankTransferFeeNote {
+      display: block;
+      max-width: 100%;
       white-space: pre-line;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+    #sheet:not(.csv-mode) #csvSummary {
+      display: none !important;
     }
     #sheet.csv-mode #federationContactLine {
       display: none !important;
@@ -673,8 +715,17 @@
             <tr><td class="border px-3 py-2">-</td><td class="border px-3 py-2 text-right">0</td><td class="border px-3 py-2 text-right">0</td><td class="border px-3 py-2 text-right">0</td></tr>
           </tbody>
         </table>
+      </div>
 
-        <div id="csvSummary" class="text-sm">
+      <div class="after-tables">
+      <div id="bankInfo" class="text-sm text-gray-700 pt-3 border-t leading-7 font-semibold">
+        <div id="bankInfoMain">■振込先情報
+みずほ銀行 渋谷中央支店 普通預金 1870255</div>
+        <div id="bankAccountKana">ザイ）ゼンニホンダイガクバスケットボールレンメイ ダイヒョウ</div>
+        <div id="bankAccountHolder">ウエマツマサヒロ</div>
+        <span id="bankTransferFeeNote">※お振込み手数料は貴社ご負担にてお願いいたします。</span>
+      </div>
+      <div id="csvSummary" class="text-sm">
           <div class="csv-total-box">
             <span>ご請求金額</span>
             <span id="csvTotalAmount">¥0</span>
@@ -691,14 +742,6 @@
             </table>
           </div>
         </div>
-      </div>
-
-      <div id="bankInfo" class="text-sm text-gray-700 pt-3 border-t leading-7 font-semibold">
-        <div id="bankInfoMain">■振込先情報 みずほ銀行 渋谷中央支店 普通預金 1870255</div>
-        <div id="bankAccountKana">ザイ）ゼンニホンダイガクバスケットボールレンメイ ダイヒョウ</div>
-        <div id="bankAccountHolder">ウエマツマサヒロ</div>
-        <span id="bankTransferFeeNote">※お振込み手数料は貴社ご負担にてお願いいたします。</span>
-      </div>
       </div>
 
       <div class="stamp-area">
@@ -844,7 +887,7 @@
 
       const bankParts = [f.bankName, f.branchName, f.accountType, f.accountNumber]
         .filter((part) => String(part || "").trim());
-      const bankLine = bankParts.length ? ["■振込先情報", ...bankParts].join(" ") : "";
+      const bankLine = bankParts.length ? `■振込先情報\n${bankParts.join(" ")}` : "";
       setText("bankInfoMain", bankLine);
       setText("bankAccountKana", f.accountNameKana);
       setText("bankAccountHolder", f.accountHolder);
