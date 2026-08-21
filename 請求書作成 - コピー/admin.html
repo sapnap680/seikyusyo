@@ -68,6 +68,7 @@
     <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
       <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">請求管理表</h1>
       <div class="flex gap-2">
+        <a href="./mail.html" class="px-5 py-2 bg-white border-2 border-cyan-500 text-cyan-700 rounded-xl font-bold hover:bg-cyan-50">PDFメール送信</a>
         <a href="./format.html" class="px-5 py-2 bg-white border-2 border-cyan-500 text-cyan-700 rounded-xl font-bold hover:bg-cyan-50">書式設定</a>
         <a href="./invoice.html" class="px-6 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-cyan-700 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">請求書作成へ</a>
       </div>
@@ -202,7 +203,7 @@
   <div id="bulkModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/50 p-4">
     <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
       <div class="flex justify-between items-start mb-4">
-        <h2 class="text-xl font-bold text-gray-800 pb-3 border-b-2 border-amber-500">範囲で一括更新 / PDF保存</h2>
+        <h2 class="text-xl font-bold text-gray-800 pb-3 border-b-2 border-amber-500">範囲で一括更新 / PDF保存 / 削除</h2>
         <button type="button" id="bulkModalClose" class="text-gray-500 hover:text-gray-800 text-2xl leading-none">&times;</button>
       </div>
 
@@ -220,6 +221,7 @@
               <input id="bulkToNo" type="number" min="1" class="border-2 border-gray-300 rounded-xl px-3 py-2 focus:border-cyan-500 outline-none w-36">
             </div>
             <button id="bulkSaveBtn" type="button" class="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 shadow-md">範囲のPDFを一括保存</button>
+            <button id="bulkDeleteBtn" type="button" class="px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 shadow-md">範囲を一括削除</button>
           </div>
         </div>
 
@@ -1133,6 +1135,70 @@
       }
     }
 
+    async function bulkDeleteInvoices() {
+      const { error, fromNo, toNo, targets } = getRangeTargets(true);
+      if (error) {
+        alert(error);
+        return;
+      }
+      if (targets.length === 0) {
+        alert("指定範囲に一致する請求書がありません");
+        return;
+      }
+
+      const ok = confirm(
+        `請求番号 ${fromNo} 〜 ${toNo} の ${targets.length}件を削除します。\n関連する入金履歴も削除されます。\nこの操作は取り消せません。実行しますか？`
+      );
+      if (!ok) return;
+      const ok2 = confirm(`本当に ${targets.length}件を削除しますか？`);
+      if (!ok2) return;
+
+      const bulkBtn = document.getElementById("bulkDeleteBtn");
+      const saveBtn = document.getElementById("bulkSaveBtn");
+      const prevLabel = bulkBtn.textContent;
+      bulkBtn.disabled = true;
+      saveBtn.disabled = true;
+      bulkBtn.textContent = "削除中…";
+
+      const failed = [];
+      let deleted = 0;
+      let deletedPayments = 0;
+
+      try {
+        for (const row of targets) {
+          bulkBtn.textContent = `削除中… ${deleted + 1}/${targets.length}`;
+          try {
+            deletedPayments += await deleteInvoiceWithPayments(row.id);
+            deleted += 1;
+          } catch (deleteError) {
+            console.error(deleteError);
+            failed.push({
+              invoiceNo: row.invoiceNo || "-",
+              clientName: row.clientName || "",
+              message: deleteError.message,
+            });
+          }
+        }
+
+        await loadInvoices();
+
+        if (failed.length === 0) {
+          alert(`削除しました（請求書${deleted}件、入金履歴${deletedPayments}件）`);
+        } else {
+          const failedLines = failed
+            .map((item) => `No.${item.invoiceNo} ${item.clientName}: ${item.message}`)
+            .join("\n");
+          alert(
+            `削除が完了しました（成功 ${deleted}件 / 失敗 ${failed.length}件 / 入金履歴${deletedPayments}件）\n\n失敗した請求書:\n${failedLines}`
+          );
+        }
+      } finally {
+        bulkBtn.disabled = false;
+        saveBtn.disabled = false;
+        bulkBtn.textContent = prevLabel;
+      }
+    }
+
     async function deleteInvoice(invoiceId, invoiceNo) {
       const label = invoiceNo ? `請求番号 ${invoiceNo}` : "この請求書";
       const confirmed = confirm(`${label} を削除しますか？\n関連する入金履歴も削除されます。`);
@@ -1344,6 +1410,7 @@
     }
     updateExtraSearchUi();
     document.getElementById("bulkSaveBtn").addEventListener("click", bulkSavePdf);
+    document.getElementById("bulkDeleteBtn").addEventListener("click", bulkDeleteInvoices);
     document.getElementById("bulkUpdateBtn").addEventListener("click", bulkUpdateInvoices);
     document.getElementById("openBulkModalBtn").addEventListener("click", openBulkModal);
     document.getElementById("bulkModalClose").addEventListener("click", closeBulkModal);
