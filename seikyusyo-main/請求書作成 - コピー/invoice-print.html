@@ -997,9 +997,29 @@
       return "";
     }
 
-    function setRecipientTitle(clientName) {
+    let lastRecipientClientName = "";
+
+    function fitRecipientTitleElement(el) {
+      if (!el) return;
+      el.style.fontSize = "";
+      el.style.width = "";
+      el.classList.remove("recipient-wrap");
+      let size = parseFloat(getComputedStyle(el).fontSize) || 16;
+      const minSize = 9.5;
+      // 長い法人名（Bリーグ等）も幅に収まるまで縮小。それでも無理なら折り返し
+      while (size > minSize && el.scrollWidth > el.clientWidth + 1) {
+        size -= 0.5;
+        el.style.fontSize = `${size}px`;
+      }
+      if (el.scrollWidth > el.clientWidth + 1) {
+        el.classList.add("recipient-wrap");
+      }
+    }
+
+    async function setRecipientTitle(clientName) {
       const el = document.getElementById("recipientTitle");
       if (!el) return;
+      lastRecipientClientName = String(clientName || "");
       const text = formatInvoiceRecipient(clientName);
       el.textContent = text;
       el.style.fontSize = "";
@@ -1014,20 +1034,22 @@
       const sizeClass = getRecipientSizeClass(clientName);
       if (sizeClass) el.classList.add(sizeClass);
 
-      // 長い法人名も含め、幅に収まるまで縮小して1行を優先。それでも無理なら折り返し
-      requestAnimationFrame(() => {
-        el.style.fontSize = "";
-        el.style.width = "";
-        el.classList.remove("recipient-wrap");
-        let size = parseFloat(getComputedStyle(el).fontSize) || 16;
-        const minSize = 9.5;
-        while (size > minSize && el.scrollWidth > el.clientWidth + 1) {
-          size -= 0.5;
-          el.style.fontSize = `${size}px`;
+      if (document.fonts && document.fonts.ready) {
+        try {
+          await document.fonts.ready;
+        } catch (_) {
+          /* ignore */
         }
-        if (el.scrollWidth > el.clientWidth + 1) {
-          el.classList.add("recipient-wrap");
-        }
+      }
+      // レイアウト確定後に計測（PDFキャプチャ前にも再実行する）
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          fitRecipientTitleElement(el);
+          requestAnimationFrame(() => {
+            fitRecipientTitleElement(el);
+            resolve();
+          });
+        });
       });
     }
 
@@ -1203,6 +1225,12 @@
       }
       try {
         await waitForStampImagesReady();
+        // html2canvas 直前に宛名を再フィット（長い法人名がPDFで溢れるのを防ぐ）
+        if (lastRecipientClientName) {
+          await setRecipientTitle(lastRecipientClientName);
+        } else {
+          fitRecipientTitleElement(document.getElementById("recipientTitle"));
+        }
         const canvas = await html2canvas(sheet, {
           scale: 2,
           useCORS: true,
@@ -1252,13 +1280,15 @@
         document.getElementById("sheet").classList.add("hide-stamp-area");
       }
       const mockType = params.get("mock");
-      if (mockType === "csv" || mockType === "csv-zero") {
+      if (mockType === "csv" || mockType === "csv-zero" || mockType === "bleague") {
         const row = {
           invoiceNo: "283",
           issueDate: "2025-12-26",
           closingDate: "",
           dueDate: "2026-01-23",
-          clientName: "北翔大学女子バスケットボール部",
+          clientName: mockType === "bleague"
+            ? "公益財団法人ジャパン・プロフェッショナル・バスケットボールリーグ"
+            : "北翔大学女子バスケットボール部",
           clientContact: "",
           clientZip: "",
           clientAddress: "",
@@ -1281,7 +1311,7 @@
         document.getElementById("closingDate").textContent = row.closingDate || "-";
         document.getElementById("dueDate").textContent = row.dueDate || "-";
         toggleFormatBySource(row);
-        setRecipientTitle(row.clientName);
+        await setRecipientTitle(row.clientName);
         currentPdfName = buildPdfFileName(row.issueDate, row.invoiceNo, row.clientName);
         document.title = currentPdfName;
         document.getElementById("federationContactLine").textContent = row.clientContact
@@ -1327,7 +1357,7 @@
         document.getElementById("closingDate").textContent = row.closingDate || "-";
         document.getElementById("dueDate").textContent = row.dueDate || "-";
         toggleFormatBySource(row);
-        setRecipientTitle(row.clientName);
+        await setRecipientTitle(row.clientName);
         currentPdfName = buildPdfFileName(row.issueDate, row.invoiceNo, row.clientName);
         document.title = currentPdfName;
         document.getElementById("federationContactLine").textContent = row.clientContact
@@ -1377,7 +1407,7 @@
       }
 
       toggleFormatBySource(row);
-      setRecipientTitle(row.clientName);
+      await setRecipientTitle(row.clientName);
       if (isCsv) {
         renderCsvTaxSummary(row);
       } else {
@@ -1387,6 +1417,10 @@
       setBankTransferFeeNote(row);
       } finally {
         applyInvoiceFormat(invoiceFormat);
+        // 書式適用後にレイアウトが変わることがあるので宛名を再フィット
+        if (lastRecipientClientName) {
+          await setRecipientTitle(lastRecipientClientName);
+        }
       }
     }
 
@@ -1408,11 +1442,8 @@
       }
       const params = new URLSearchParams(window.location.search);
       if (params.get("download") === "1") {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            downloadPdf();
-          });
-        });
+        // 宛名フィット完了後にPDF保存（setRecipientTitle は loadInvoice 内で await 済み想定だが念のため）
+        await downloadPdf();
       }
     });
   </script>
